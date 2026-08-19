@@ -1,0 +1,7 @@
+node_modules/
+.env
+dist/
+uploads/
+coverage/
+server/tmp-*.js
+test-1x1.gif
