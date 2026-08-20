@@ -10,6 +10,7 @@ import authRoutes from './routes/auth.js';
 import eventRoutes from './routes/events.js';
 import registrationRoutes from './routes/registrations.js';
 import uploadRoutes from './routes/uploads.js';
+import sponsorRoutes from './routes/sponsors.js';
 
 const app = express();
 
@@ -34,6 +35,7 @@ app.use('/uploads', express.static('uploads'));
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.use('/api/auth', authRoutes); app.use('/api/events', eventRoutes); app.use('/api/registrations', registrationRoutes);
 app.use('/api/uploads', uploadRoutes);
+app.use('/api/sponsors', sponsorRoutes);
 app.use((err, _req, res, _next) => {
   console.error(err);
   // Mongoose validation errors -> 400 with validation messages

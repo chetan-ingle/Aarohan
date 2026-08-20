@@ -1,6 +1,7 @@
 import express from 'express';
 import upload from '../middleware/upload.js';
 import imagekit from '../config/imagekit.js';
+import { protect, authorize } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -48,6 +49,17 @@ router.post('/upi-qr', upload.single('qr'), async (req, res, next) => {
   if (!req.file) return res.status(400).json({ message: 'Upload a UPI QR image' });
   try {
     const result = await uploadToImageKit(req.file, 'aarohan/upi');
+    res.status(201).json({ url: result.url, fileId: result.fileId });
+  } catch (error) {
+    if (error && error.status) return res.status(error.status).json({ message: error.message });
+    next(error);
+  }
+});
+
+router.post('/sponsor', protect, authorize('SUPER_ADMIN'), upload.single('sponsor'), async (req, res, next) => {
+  if (!req.file) return res.status(400).json({ message: 'Upload a PNG, JPG, or WebP sponsor image up to 5 MB' });
+  try {
+    const result = await uploadToImageKit(req.file, 'aarohan/sponsors');
     res.status(201).json({ url: result.url, fileId: result.fileId });
   } catch (error) {
     if (error && error.status) return res.status(error.status).json({ message: error.message });
