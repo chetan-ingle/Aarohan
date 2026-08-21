@@ -5,7 +5,9 @@ const eventSchema = new mongoose.Schema({
   description: String,
   rules: String,
   fee: { type: Number, required: true, min: 0 },
-  capacity: { type: Number, required: true, min: 1 },
+  // Capacity is intentionally not collected in the event form. This high default
+  // keeps registration open unless an existing event was configured with a limit.
+  capacity: { type: Number, default: 100000, min: 1 },
   format: { type: String, enum: ['SOLO', 'TEAM'], required: true },
   minTeamSize: { type: Number, default: 1 },
   maxTeamSize: { type: Number, default: 1 },
