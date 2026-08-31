@@ -24,7 +24,7 @@ router.post('/send-email-otp', asyncHandler(async (req, res) => {
   const email = normalizeEmail(req.body.email);
   if (!/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ message: 'Enter a valid email address' });
   const existing = await EmailVerification.findOne({ email });
-  if (existing && Date.now() - existing.lastSentAt.getTime() < 60 * 1000) return res.status(429).json({ message: 'Please wait one minute before requesting another code' });
+  if (existing && Date.now() - existing.lastSentAt.getTime() < 45 * 1000) return res.status(429).json({ message: 'Please wait 45 seconds before requesting another code' });
   const code = String(crypto.randomInt(100000, 1000000));
   const delivery = await sendEmailVerificationOtp(email, code);
   if (!delivery.sent) return res.status(503).json({ message: 'Could not send verification email. Please try again shortly.' });
