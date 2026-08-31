@@ -23,6 +23,11 @@ export const sendRegistrationEmail = (registration, event) => send(
   { subject: `${process.env.FESTIVAL_NAME || 'Aarohan'} registration received`, text: `Your registration for ${event.name} was received. Registration ID: ${registration.registrationId}. Payment verification is pending.`, html: `<h1>Registration received</h1><p>Thank you for registering for <strong>${event.name}</strong>.</p><p><strong>Registration ID:</strong> ${registration.registrationId}</p><p>Payment verification is pending. Your QR pass will be emailed after Finance approval.</p>` }
 );
 
+export const sendEmailVerificationOtp = (email, code) => send(
+  { to: email, type: 'EMAIL_VERIFICATION_OTP', subject: `${process.env.FESTIVAL_NAME || 'Aarohan'} email verification code` },
+  { subject: `${process.env.FESTIVAL_NAME || 'Aarohan'} email verification code`, text: `Your email verification code is ${code}. It expires in 10 minutes. Do not share this code.`, html: `<h1>Email verification</h1><p>Your Abstract Aarohan verification code is:</p><p style="font-size:28px;font-weight:bold;letter-spacing:6px">${code}</p><p>This code expires in 10 minutes. Do not share it with anyone.</p>` }
+);
+
 export const sendReviewReminder = async (registration, event, recipients) => {
   const uniqueRecipients = [...new Set(recipients.filter(Boolean))];
   const subject = `Action needed: verify ${registration.registrationId} for ${event.name}`;
