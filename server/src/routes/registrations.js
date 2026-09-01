@@ -19,6 +19,7 @@ const canAccess = () => true;
 const hashOtp = (code) => crypto.createHash('sha256').update(String(code)).digest('hex');
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 const validIndianPhone = (phone) => /^\+91[6-9]\d{9}$/.test(String(phone || '').replace(/[\s-]/g, ''));
+const configuredEmails = (name) => String(process.env[name] || '').split(',').map(normalizeEmail).filter((email) => /^\S+@\S+\.\S+$/.test(email));
 
 router.post('/send-email-otp', asyncHandler(async (req, res) => {
   const email = normalizeEmail(req.body.email);
@@ -59,10 +60,14 @@ router.post('/', asyncHandler(async (req, res) => {
   const otpOutcome = await verifyOtp(req.body.leader?.email, req.body.emailOtp, true);
   if (!otpOutcome.ok) return res.status(400).json({ message: otpOutcome.message });
   const registration = await Registration.create({ ...req.body, teamName: '', members, payment: { ...req.body.payment, amount: event.fee } });
-  await sendRegistrationEmail(registration, event);
+  const registrationDelivery = await sendRegistrationEmail(registration, event);
   const reviewers = await User.find({ role: { $in: ['FINANCE', 'CCT'] } }).select('email');
-  await sendReviewReminder(registration, event, reviewers.map((user) => user.email));
-  res.status(201).json({ registrationId: registration.registrationId, status: registration.status, message: 'Registration submitted for payment verification.' });
+  const recipients = [...new Set([...reviewers.map((user) => user.email), ...configuredEmails('FINANCE_REMINDER_EMAILS'), ...configuredEmails('CCT_REMINDER_EMAILS')].map(normalizeEmail).filter(Boolean))];
+  const reminderDeliveries = recipients.length ? await sendReviewReminder(registration, event, recipients) : [];
+  const reminderSent = reminderDeliveries.filter((delivery) => delivery.sent).length;
+  if (!recipients.length) console.warn(`No Finance/CCT reminder recipients are configured for ${registration.registrationId}`);
+  if (recipients.length && reminderSent !== recipients.length) console.error(`Some staff reminder emails failed for ${registration.registrationId}`);
+  res.status(201).json({ registrationId: registration.registrationId, status: registration.status, message: 'Registration submitted for payment verification.', email: { participantSent: registrationDelivery.sent, staffReminders: { recipients: recipients.length, sent: reminderSent } } });
 }));
 
 router.get('/', protect, authorize('SUPER_ADMIN', 'FINANCE', 'CCT', 'JUDGE'), asyncHandler(async (req, res) => {

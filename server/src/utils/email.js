@@ -30,11 +30,11 @@ export const sendEmailVerificationOtp = (email, code) => send(
 
 export const sendReviewReminder = async (registration, event, recipients) => {
   const uniqueRecipients = [...new Set(recipients.filter(Boolean))];
-  const subject = `Action needed: verify ${registration.registrationId} for ${event.name}`;
-  return Promise.all(uniqueRecipients.map((to) => send(
+  const subject = `Payment confirmation required: ${registration.registrationId} — ${event.name}`;
+  return Promise.all(uniqueRecipients.map(async (to) => ({ to, ...(await send(
     { registration: registration._id, to, type: 'STAFF_PAYMENT_REVIEW', subject },
-    { subject, text: `A participant has registered for ${event.name}. Registration ID: ${registration.registrationId}. Please check the payment proof, UTR, and amount in the Finance dashboard, then approve or reject the payment.`, html: `<h1>Payment review needed</h1><p>A participant has registered for <strong>${event.name}</strong>.</p><p><strong>Registration ID:</strong> ${registration.registrationId}</p><p>Please check the payment proof, UTR, and amount in the Finance dashboard, then approve or reject the payment.</p>` }
-  )));
+    { subject, text: `A participant has registered for ${event.name}. Registration ID: ${registration.registrationId}. Please check and confirm the participant payment from the dashboard. Review the payment proof, UTR, and amount, then approve or reject the payment.`, html: `<h1>Payment confirmation required</h1><p>A participant has registered for <strong>${event.name}</strong>.</p><p><strong>Registration ID:</strong> ${registration.registrationId}</p><p><strong>Please check and confirm the participant payment from the dashboard.</strong></p><p>Review the payment proof, UTR, and amount, then approve or reject the payment.</p>` }
+  )) })));
 };
 
 export const sendPassEmail = async (registration, event) => {
