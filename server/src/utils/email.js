@@ -4,15 +4,19 @@ import Notification from '../models/Notification.js';
 
 const send = async (payload, message) => {
   try {
-    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+    const gmailUser = String(process.env.GMAIL_USER || '').trim();
+    // Google displays app passwords in groups; SMTP requires the raw 16 characters.
+    const gmailAppPassword = String(process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
+    if (!gmailUser || !gmailAppPassword) {
       await Notification.create({ ...payload, status: 'PENDING', error: 'Gmail App Password is not configured' });
       return { sent: false, error: 'Gmail App Password is not configured' };
     }
-    const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD } });
-    await transporter.sendMail({ from: process.env.EMAIL_FROM || process.env.GMAIL_USER, to: payload.to, ...message });
+    const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user: gmailUser, pass: gmailAppPassword } });
+    await transporter.sendMail({ from: process.env.EMAIL_FROM || gmailUser, to: payload.to, ...message });
     await Notification.create({ ...payload, status: 'SENT' });
     return { sent: true };
   } catch (error) {
+    console.error(`Email delivery failed for ${payload.type}:`, error.code || error.message);
     await Notification.create({ ...payload, status: 'FAILED', error: error.message });
     return { sent: false, error: error.message };
   }
