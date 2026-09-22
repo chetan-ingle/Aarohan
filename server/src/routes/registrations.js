@@ -2,11 +2,10 @@ import express from 'express';
 import crypto from 'node:crypto';
 import Event from '../models/Event.js';
 import Registration from '../models/Registration.js';
-import EmailVerification from '../models/EmailVerification.js';
 import User from '../models/User.js';
 import { protect, authorize } from '../middleware/auth.js';
 import { audit } from '../utils/audit.js';
-import { sendEmailVerificationOtp, sendPassEmail, sendRegistrationEmail, sendReviewReminder } from '../utils/email.js';
+import { sendPassEmail, sendRegistrationEmail, sendReviewReminder } from '../utils/email.js';
 import { sendCsv } from '../utils/csv.js';
 import { createCategoryWorkbook } from '../utils/xlsx.js';
 import { deleteImageKitFile } from '../utils/imagekit.js';
@@ -16,37 +15,9 @@ const router = express.Router();
 // All staff have access to every event; role checks still protect each workflow area.
 const scoped = () => ({});
 const canAccess = () => true;
-const hashOtp = (code) => crypto.createHash('sha256').update(String(code)).digest('hex');
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 const validIndianPhone = (phone) => /^\+91[6-9]\d{9}$/.test(String(phone || '').replace(/[\s-]/g, ''));
 const configuredEmails = (name) => String(process.env[name] || '').split(',').map(normalizeEmail).filter((email) => /^\S+@\S+\.\S+$/.test(email));
-
-router.post('/send-email-otp', asyncHandler(async (req, res) => {
-  const email = normalizeEmail(req.body.email);
-  if (!/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ message: 'Enter a valid email address' });
-  const existing = await EmailVerification.findOne({ email });
-  if (existing && Date.now() - existing.lastSentAt.getTime() < 45 * 1000) return res.status(429).json({ message: 'Please wait 45 seconds before requesting another code' });
-  const code = String(crypto.randomInt(100000, 1000000));
-  const delivery = await sendEmailVerificationOtp(email, code);
-  if (!delivery.sent) return res.status(503).json({ message: 'Could not send verification email. Please try again shortly.' });
-  await EmailVerification.findOneAndUpdate({ email }, { codeHash: hashOtp(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000), lastSentAt: new Date(), attempts: 0 }, { upsert: true, new: true, setDefaultsOnInsert: true });
-  res.json({ message: 'Verification code sent. It expires in 10 minutes.' });
-}));
-
-const verifyOtp = async (email, code, consume = false) => {
-  const record = await EmailVerification.findOne({ email: normalizeEmail(email) });
-  if (!record || record.expiresAt < new Date()) return { ok: false, message: 'Verification code expired or was not requested' };
-  if (record.attempts >= 5) return { ok: false, message: 'Too many incorrect attempts. Request a new code.' };
-  if (record.codeHash !== hashOtp(code)) { record.attempts += 1; await record.save(); return { ok: false, message: 'Incorrect verification code' }; }
-  if (consume) await EmailVerification.deleteOne({ _id: record._id });
-  return { ok: true };
-};
-
-router.post('/verify-email-otp', asyncHandler(async (req, res) => {
-  const outcome = await verifyOtp(req.body.email, req.body.otp);
-  if (!outcome.ok) return res.status(400).json({ message: outcome.message });
-  res.json({ message: 'Email verified' });
-}));
 
 router.post('/', asyncHandler(async (req, res) => {
   const event = await Event.findOne({ _id: req.body.event, active: true });
@@ -57,8 +28,6 @@ router.post('/', asyncHandler(async (req, res) => {
   if (!validIndianPhone(req.body.leader?.phone)) return res.status(400).json({ message: 'Enter a valid 10-digit Indian mobile number with +91' });
   const members = [];
   for (const field of (event.formFields || [])) if (/[a-z0-9]/i.test(field.label || '') && field.required && !req.body.responses?.[field.key]) return res.status(400).json({ message: `${field.label} is required` });
-  const otpOutcome = await verifyOtp(req.body.leader?.email, req.body.emailOtp, true);
-  if (!otpOutcome.ok) return res.status(400).json({ message: otpOutcome.message });
   const registration = await Registration.create({ ...req.body, teamName: '', members, payment: { ...req.body.payment, amount: event.fee } });
   const registrationDelivery = await sendRegistrationEmail(registration, event);
   const reviewers = await User.find({ role: { $in: ['FINANCE', 'CCT'] } }).select('email');

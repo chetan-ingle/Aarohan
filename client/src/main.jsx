@@ -1,148 +1,2098 @@
-import React, { useEffect, useState } from 'react';
-import { createRoot } from 'react-dom/client';
-import { QRCodeSVG } from 'qrcode.react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
-import './styles.css';
-import './staff.css';
-import './pages.css';
-import './finance.css';
+import React, { useEffect, useState } from "react";
+import { createRoot } from "react-dom/client";
+import { QRCodeSVG } from "qrcode.react";
+import { Html5QrcodeScanner } from "html5-qrcode";
+import "./styles.css";
+import "./staff.css";
+import "./pages.css";
+import "./finance.css";
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-const money = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
-const eventDateTime = (value) => value ? new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '';
-const dateTimeInputValue = (value) => { if (!value) return ''; const date = new Date(value); date.setMinutes(date.getMinutes() - date.getTimezoneOffset()); return date.toISOString().slice(0, 16); };
+const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const money = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 0,
+});
+const eventDateTime = (value) =>
+  value
+    ? new Intl.DateTimeFormat("en-IN", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date(value))
+    : "";
+const dateTimeInputValue = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+  return date.toISOString().slice(0, 16);
+};
 const confirmAction = (message) => window.confirm(message);
 function ActionConfirmModal({ confirmation, onClose }) {
   if (!confirmation) return null;
-  const confirm = async () => { onClose(); await confirmation.onConfirm(); };
-  return <div className="action-confirm-backdrop" role="presentation"><section className="action-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="action-confirm-title"><p className="eyebrow">CONFIRM ACTION</p><h2 id="action-confirm-title">{confirmation.title}</h2><p>{confirmation.message}</p><div><button type="button" className="ghost" onClick={onClose}>Cancel</button><button type="button" className={confirmation.danger ? 'danger' : ''} onClick={() => void confirm()}>{confirmation.confirmLabel || 'Confirm'}</button></div></section></div>;
+  const confirm = async () => {
+    onClose();
+    await confirmation.onConfirm();
+  };
+  return (
+    <div className="action-confirm-backdrop" role="presentation">
+      <section
+        className="action-confirm-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="action-confirm-title"
+      >
+        <p className="eyebrow">CONFIRM ACTION</p>
+        <h2 id="action-confirm-title">{confirmation.title}</h2>
+        <p>{confirmation.message}</p>
+        <div>
+          <button type="button" className="ghost" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className={confirmation.danger ? "danger" : ""}
+            onClick={() => void confirm()}
+          >
+            {confirmation.confirmLabel || "Confirm"}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
 }
-const call = async (path, { token, ...options } = {}) => { const r = await fetch(`${API}${path}`, { ...options, headers: { ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options.headers } }); const data = r.headers.get('content-type')?.includes('text/csv') ? await r.text() : await r.json(); if (!r.ok) { if (r.status === 401 && token) { localStorage.removeItem('aarohan-session'); window.location.hash = 'login'; } throw Error(data.message || 'Request failed'); } return data; };
+const call = async (path, { token, ...options } = {}) => {
+  const r = await fetch(`${API}${path}`, {
+    ...options,
+    headers: {
+      ...(options.body instanceof FormData
+        ? {}
+        : { "Content-Type": "application/json" }),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
+  });
+  const data = r.headers.get("content-type")?.includes("text/csv")
+    ? await r.text()
+    : await r.json();
+  if (!r.ok) {
+    if (r.status === 401 && token) {
+      localStorage.removeItem("aarohan-session");
+      window.location.hash = "login";
+    }
+    throw Error(data.message || "Request failed");
+  }
+  return data;
+};
 
-function PublicRegistration({ events, refresh, lockedEventId = '' }) {
-  const [eventId, setEventId] = useState(lockedEventId || ''); const [notice, setNotice] = useState(''); const [proof, setProof] = useState(null); const [otp, setOtp] = useState(''); const [otpNotice, setOtpNotice] = useState(''); const [otpSending, setOtpSending] = useState(false); const [otpCooldown, setOtpCooldown] = useState(0); const [otpSent, setOtpSent] = useState(false); const [emailVerified, setEmailVerified] = useState(false); const [successRegistration, setSuccessRegistration] = useState(null); const [data, setData] = useState({ leader: { name: '', email: '', phone: '+91' }, college: '', department: '', year: '', teamName: '', members: [], payment: { amount: '', utr: '', screenshotUrl: '' } });
+function PublicRegistration({ events, refresh, lockedEventId = "" }) {
+  const [eventId, setEventId] = useState(lockedEventId || "");
+  const [notice, setNotice] = useState("");
+  const [proof, setProof] = useState(null);
+  const [successRegistration, setSuccessRegistration] = useState(null);
+  const [data, setData] = useState({
+    leader: { name: "", email: "", phone: "+91" },
+    college: "",
+    department: "",
+    year: "",
+    teamName: "",
+    members: [],
+    payment: { amount: "", utr: "", screenshotUrl: "" },
+  });
   const event = events.find((x) => x._id === eventId);
-  useEffect(() => { if (lockedEventId) setEventId(lockedEventId); }, [lockedEventId]);
-  useEffect(() => { if (event) setData((x) => ({ ...x, payment: { ...x.payment, amount: event.fee } })); }, [eventId]);
-  useEffect(() => { if (!otpCooldown) return undefined; const timer = window.setInterval(() => setOtpCooldown((seconds) => Math.max(0, seconds - 1)), 1000); return () => window.clearInterval(timer); }, [otpCooldown]);
-  const sendOtp = async () => { try { setOtpSending(true); setOtpNotice('Sending code…'); await call('/registrations/send-email-otp', { method: 'POST', body: JSON.stringify({ email: data.leader.email }) }); setEmailVerified(false); setOtp(''); setOtpSent(true); setOtpCooldown(45); setOtpNotice('Code sent to your email.'); } catch (error) { setOtpNotice(error.message); } finally { setOtpSending(false); } };
-  const submit = async (e) => { e.preventDefault(); try { setNotice('Verifying email…'); await call('/registrations/verify-email-otp', { method: 'POST', body: JSON.stringify({ email: data.leader.email, otp }) }); setEmailVerified(true); setNotice('Submitting…'); let screenshotUrl = data.payment.screenshotUrl; let screenshotFileId = ''; if (proof) { const body = new FormData(); body.append('proof', proof); const uploaded = await call('/uploads/payment-proof', { method: 'POST', body }); screenshotUrl = uploaded.url; screenshotFileId = uploaded.fileId; } const isTeam = String(event?.format || '').toUpperCase() === 'TEAM'; const result = await call('/registrations', { method: 'POST', body: JSON.stringify({ ...data, event: eventId, emailOtp: otp, teamName: isTeam ? data.teamName : '', members: isTeam ? data.members : [], payment: { ...data.payment, amount: event.fee, screenshotUrl, screenshotFileId } }) }); setNotice(''); setSuccessRegistration(result); } catch (error) { setNotice(error.message); } };
-  const leader = (field) => ({ value: data.leader[field], onChange: (e) => { setData({ ...data, leader: { ...data.leader, [field]: e.target.value } }); if (field === 'email') { setEmailVerified(false); setOtpSent(false); setOtpCooldown(0); setOtp(''); setOtpNotice(''); } } });
-  const customFields = event?.formFields?.filter((field) => /[a-z0-9]/i.test(field.label || '')).map((field) => <label key={field.key}>{field.label}<input required={field.required} value={data.responses?.[field.key] || ''} onChange={(e) => setData({ ...data, responses: { ...(data.responses || {}), [field.key]: e.target.value } })} /></label>);
-  const paymentInfo = event && <>{event.upiQrUrl && <img className="upi-qr" src={event.upiQrUrl} alt="Scan this QR for payment" />}{event.paymentInstructions && <p className="payment-note">{event.paymentInstructions}</p>}{event.upiId && <p className="payment-note">UPI ID: <b>{event.upiId}</b></p>}</>;
-  return <><section className="layout"><form onSubmit={submit}><h2>{event ? `${event.name} registration` : 'Event registration'}</h2>{!lockedEventId && <label>Choose event<select value={eventId} onChange={(e) => setEventId(e.target.value)} required><option value="">Select an event</option>{events.map((x) => <option key={x._id} value={x._id}>{x.name} — {money.format(x.fee)}</option>)}</select></label>}{lockedEventId && !event && <p className="message">This event registration link is unavailable or no longer active.</p>}{event && <div className="event-note registration-event-info"><p><b>{event.category}</b> · <b>{event.format}</b> · Registration fees: <b>{money.format(event.fee)}</b></p>{event.venue && <p><b>Venue:</b> {event.venue}</p>}</div>}<div className="grid"><label>Participant name<input required placeholder="Your full name" {...leader('name')} /></label><label>Mobile number<div className="phone-input"><span>+91</span><input type="tel" required pattern="[6-9][0-9]{9}" placeholder="10-digit number" value={data.leader.phone.replace(/^\+91/, '')} onChange={(e) => setData({ ...data, leader: { ...data.leader, phone: `+91${e.target.value.replace(/\D/g, '').slice(0, 10)}` } })} /></div></label></div><div className="grid email-otp-grid"><label>Email address<input type="email" required placeholder="you@example.com" {...leader('email')} /></label><label>Email OTP<div className="otp-row"><input required inputMode="numeric" pattern="[0-9]{6}" maxLength="6" placeholder="6-digit OTP" value={otp} onChange={(e) => { setOtp(e.target.value.replace(/\D/g, '').slice(0, 6)); setEmailVerified(false); }} /><button type="button" disabled={otpSending || otpCooldown > 0 || !data.leader.email} onClick={sendOtp}>{otpSending ? 'Sending…' : otpCooldown > 0 ? `Resend OTP (${otpCooldown}s)` : otpSent ? 'Resend OTP' : 'Send OTP'}</button></div>{otpNotice && <small className="otp-notice">{otpNotice}</small>}{emailVerified && <small className="otp-verified">Email verified</small>}</label></div><div className="grid"><label>College name<input required placeholder="Your college" value={data.college} onChange={(e) => setData({ ...data, college: e.target.value })} /></label><label>Year / Department<input placeholder="Example: FY BCA" value={`${data.year}${data.year && data.department ? ' / ' : ''}${data.department}`} onChange={(e) => setData({ ...data, year: e.target.value })} /></label></div>{customFields}<hr /><h3>Scan this QR for payment</h3>{paymentInfo}<p className="payment-note">Pay exactly <b>{event ? money.format(event.fee) : 'the event fee'}</b>. This amount is fixed by the event admin.</p><label>UPI transaction ID / UTR<input required placeholder="Enter the UTR after payment" value={data.payment.utr} onChange={(e) => setData({ ...data, payment: { ...data.payment, utr: e.target.value } })} /></label><label>Payment screenshot (JPG, PNG, WebP; maximum 5 MB)<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setProof(e.target.files[0])} /></label><button disabled={!event}>Submit registration</button>{event?.rules && <div className="registration-rules registration-rules-bottom"><b>Rules</b><p>{event.rules}</p></div>}{notice && <p className="message">{notice}</p>}</form><Info /></section>{successRegistration && <div className="success-modal" role="dialog" aria-modal="true"><div><span>✦</span><h2>Registration successful</h2><p>Your registration ID is <b>{successRegistration.registrationId}</b>.</p><p>Payment verification is pending. A confirmation email has been sent to you.</p><button onClick={() => setSuccessRegistration(null)}>Done</button></div></div>}</>;
+  useEffect(() => {
+    if (lockedEventId) setEventId(lockedEventId);
+  }, [lockedEventId]);
+  useEffect(() => {
+    if (event)
+      setData((x) => ({ ...x, payment: { ...x.payment, amount: event.fee } }));
+  }, [eventId]);
+  const submit = async (e) => {
+    e.preventDefault();
+    try {
+      setNotice("Submitting…");
+      let screenshotUrl = data.payment.screenshotUrl;
+      let screenshotFileId = "";
+      if (proof) {
+        const body = new FormData();
+        body.append("proof", proof);
+        const uploaded = await call("/uploads/payment-proof", {
+          method: "POST",
+          body,
+        });
+        screenshotUrl = uploaded.url;
+        screenshotFileId = uploaded.fileId;
+      }
+      const isTeam = String(event?.format || "").toUpperCase() === "TEAM";
+      const result = await call("/registrations", {
+        method: "POST",
+        body: JSON.stringify({
+          ...data,
+          event: eventId,
+          teamName: isTeam ? data.teamName : "",
+          members: isTeam ? data.members : [],
+          payment: {
+            ...data.payment,
+            amount: event.fee,
+            screenshotUrl,
+            screenshotFileId,
+          },
+        }),
+      });
+      setNotice("");
+      setSuccessRegistration(result);
+    } catch (error) {
+      setNotice(error.message);
+    }
+  };
+  const leader = (field) => ({
+    value: data.leader[field],
+    onChange: (e) =>
+      setData({ ...data, leader: { ...data.leader, [field]: e.target.value } }),
+  });
+  const customFields = event?.formFields
+    ?.filter((field) => /[a-z0-9]/i.test(field.label || ""))
+    .map((field) => (
+      <label key={field.key}>
+        {field.label}
+        <input
+          required={field.required}
+          value={data.responses?.[field.key] || ""}
+          onChange={(e) =>
+            setData({
+              ...data,
+              responses: {
+                ...(data.responses || {}),
+                [field.key]: e.target.value,
+              },
+            })
+          }
+        />
+      </label>
+    ));
+  const paymentInfo = event && (
+    <>
+      {event.upiQrUrl && (
+        <img
+          className="upi-qr"
+          src={event.upiQrUrl}
+          alt="Scan this QR for payment"
+        />
+      )}
+      {event.paymentInstructions && (
+        <p className="payment-note">{event.paymentInstructions}</p>
+      )}
+      {event.upiId && (
+        <p className="payment-note">
+          UPI ID: <b>{event.upiId}</b>
+        </p>
+      )}
+    </>
+  );
+  return (
+    <>
+      <section className="layout">
+        <form onSubmit={submit}>
+          <h2>{event ? `${event.name} registration` : "Event registration"}</h2>
+          {!lockedEventId && (
+            <label>
+              Choose event
+              <select
+                value={eventId}
+                onChange={(e) => setEventId(e.target.value)}
+                required
+              >
+                <option value="">Select an event</option>
+                {events.map((x) => (
+                  <option key={x._id} value={x._id}>
+                    {x.name} — {money.format(x.fee)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {lockedEventId && !event && (
+            <p className="message">
+              This event registration link is unavailable or no longer active.
+            </p>
+          )}
+          {event && (
+            <div className="event-note registration-event-info">
+              <p>
+                <b>{event.category}</b> · <b>{event.format}</b> · Registration
+                fees: <b>{money.format(event.fee)}</b>
+              </p>
+              {event.venue && (
+                <p>
+                  <b>Venue:</b> {event.venue}
+                </p>
+              )}
+            </div>
+          )}
+          <div className="grid">
+            <label>
+              Participant name
+              <input
+                required
+                placeholder="Your full name"
+                {...leader("name")}
+              />
+            </label>
+            <label>
+              Mobile number
+              <div className="phone-input">
+                <span>+91</span>
+                <input
+                  type="tel"
+                  required
+                  pattern="[6-9][0-9]{9}"
+                  placeholder="10-digit number"
+                  value={data.leader.phone.replace(/^\+91/, "")}
+                  onChange={(e) =>
+                    setData({
+                      ...data,
+                      leader: {
+                        ...data.leader,
+                        phone: `+91${e.target.value.replace(/\D/g, "").slice(0, 10)}`,
+                      },
+                    })
+                  }
+                />
+              </div>
+            </label>
+          </div>
+          <div className="grid">
+            <label>
+              Email address
+              <input
+                type="email"
+                required
+                placeholder="you@example.com"
+                {...leader("email")}
+              />
+            </label>
+          </div>
+          <div className="grid">
+            <label>
+              College name
+              <input
+                required
+                placeholder="Your college"
+                value={data.college}
+                onChange={(e) => setData({ ...data, college: e.target.value })}
+              />
+            </label>
+            <label>
+              Year / Department
+              <input
+                placeholder="Example: FY BCA"
+                value={`${data.year}${data.year && data.department ? " / " : ""}${data.department}`}
+                onChange={(e) => setData({ ...data, year: e.target.value })}
+              />
+            </label>
+          </div>
+          {customFields}
+          <hr />
+          <h3>Scan this QR for payment</h3>
+          {paymentInfo}
+          <p className="payment-note">
+            Pay exactly{" "}
+            <b>{event ? money.format(event.fee) : "the event fee"}</b>. This
+            amount is fixed by the event admin.
+          </p>
+          <label>
+            UPI transaction ID / UTR
+            <input
+              required
+              placeholder="Enter the UTR after payment"
+              value={data.payment.utr}
+              onChange={(e) =>
+                setData({
+                  ...data,
+                  payment: { ...data.payment, utr: e.target.value },
+                })
+              }
+            />
+          </label>
+          <label>
+            Payment screenshot (JPG, PNG, WebP; maximum 5 MB)
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={(e) => setProof(e.target.files[0])}
+            />
+          </label>
+          <button disabled={!event}>Submit registration</button>
+          {event?.rules && (
+            <div className="registration-rules registration-rules-bottom">
+              <b>Rules</b>
+              <p>{event.rules}</p>
+            </div>
+          )}
+          {notice && <p className="message">{notice}</p>}
+        </form>
+        <Info />
+      </section>
+      {successRegistration && (
+        <div className="success-modal" role="dialog" aria-modal="true">
+          <div>
+            <span>✦</span>
+            <h2>Registration successful</h2>
+            <p>
+              Your registration ID is{" "}
+              <b>{successRegistration.registrationId}</b>.
+            </p>
+            <p>
+              Payment verification is pending. A confirmation email has been
+              sent to you.
+            </p>
+            <button onClick={() => setSuccessRegistration(null)}>Done</button>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
-function Info() { return <aside><h2>How it works</h2><ol><li>Register and upload your UPI payment proof.</li><li>Finance verifies the transaction.</li><li>Download your secure QR pass.</li><li>Scan it once at the gate.</li></ol><p className="aside-foot">Bring an active QR pass and college ID.</p></aside>; }
+function Info() {
+  return (
+    <aside>
+      <h2>How it works</h2>
+      <ol>
+        <li>Register and upload your UPI payment proof.</li>
+        <li>Finance verifies the transaction.</li>
+        <li>Download your secure QR pass.</li>
+        <li>Scan it once at the gate.</li>
+      </ol>
+      <p className="aside-foot">Bring an active QR pass and college ID.</p>
+    </aside>
+  );
+}
 const fallbackSponsors = [
-  ['Bisleri', '01_Bisleri_HD.jpg'], ['OPPO', '02_OPPO_HD.jpg'], ['RiteBite Max Protein', '03_RiteBite_Max_Protein_HD.jpg'], ['KTM', '04_KTM_HD.jpg'], ['Indian Bank', '05_Indian_Bank_HD.jpg'], ['92.7 Big FM', '06_92_7_Big_FM_HD.jpg'], ['Lakmé', '07_Lakme_HD.jpg'], ['IDFC First Bank', '08_IDFC_First_Bank_HD.jpg'], ['Elegant Marine Services', '09_Elegant_Marine_Services_HD.jpg'], ['Fleet Management Limited', '10_Fleet_Management_Limited_HD.jpg'], ['SAO Foods', '11_SAO_Foods_HD.jpg'], ['SUPCON', '12_SUPCON_HD.jpg'], ['Sports Reconnect', '13_Sports_Reconnect_HD.jpg'], ['Kamala Built on Principles', '14_Kamala_Built_on_Principles_HD.jpg'], ['Total Sports Fitness', '15_Total_Sports_Fitness_HD.jpg'],
+  ["Bisleri", "01_Bisleri_HD.jpg"],
+  ["OPPO", "02_OPPO_HD.jpg"],
+  ["RiteBite Max Protein", "03_RiteBite_Max_Protein_HD.jpg"],
+  ["KTM", "04_KTM_HD.jpg"],
+  ["Indian Bank", "05_Indian_Bank_HD.jpg"],
+  ["92.7 Big FM", "06_92_7_Big_FM_HD.jpg"],
+  ["Lakmé", "07_Lakme_HD.jpg"],
+  ["IDFC First Bank", "08_IDFC_First_Bank_HD.jpg"],
+  ["Elegant Marine Services", "09_Elegant_Marine_Services_HD.jpg"],
+  ["Fleet Management Limited", "10_Fleet_Management_Limited_HD.jpg"],
+  ["SAO Foods", "11_SAO_Foods_HD.jpg"],
+  ["SUPCON", "12_SUPCON_HD.jpg"],
+  ["Sports Reconnect", "13_Sports_Reconnect_HD.jpg"],
+  ["Kamala Built on Principles", "14_Kamala_Built_on_Principles_HD.jpg"],
+  ["Total Sports Fitness", "15_Total_Sports_Fitness_HD.jpg"],
 ];
-function Home({ events, sponsors, go }) { const visibleSponsors = [...fallbackSponsors.map(([name, file]) => [name, `/sponsors/${file}`]), ...sponsors.map((item) => [item.name, item.imageUrl])]; return <><section className="home-hero"><p className="eyebrow">25 YEARS OF LEGACY · ELEVATE · INNOVATE · INSPIRE</p><h1 className="aarohan-title">Abstract Aarohan</h1><h2>The ascent continues</h2><p>Where management, sport, and culture converge under one constellation.</p><div><button onClick={() => go('events')}>Explore events</button><button className="ghost" onClick={() => go('register')}>Register now</button></div></section><section className="sponsors-section"><p className="eyebrow">OUR SPONSORS</p><h2>Powered by our partners</h2><div className="sponsor-marquee" aria-label="Aarohan sponsors"><div className="sponsor-track">{[...visibleSponsors, ...visibleSponsors].map(([name, imageUrl], index) => <div className="sponsor-logo" key={`${imageUrl}-${index}`} aria-hidden={index >= visibleSponsors.length}><img src={imageUrl} alt={name} /></div>)}</div></div></section><section className="home-section compact"><h2>{events.length ? `${events.length} events are open` : 'Events are launching soon'}</h2><button onClick={() => go('events')}>View event catalogue</button></section></>; }
-function EventExplorer({ events, go }) { const categories = [['SPORT', 'Sports'], ['MANAGEMENT', 'Management'], ['CULTURAL', 'Cultural']]; return <section className="catalogue"><p className="eyebrow">EVENT CATALOGUE</p><h1>Choose your challenge</h1>{categories.map(([key, title]) => { const categoryEvents = events.filter((event) => event.category === key); return <section className="category-section" key={key}><p className="eyebrow">{title.toUpperCase()}</p><h2>{title} events</h2>{categoryEvents.length ? <div className="event-grid">{categoryEvents.map((event) => <article key={event._id}><p>{event.format} · {event.venue || 'Venue TBA'}</p><h3>{event.name}</h3><span>Registration fees: {money.format(event.fee)}</span>{event.startsAt && <span className="event-date">Date & time: {eventDateTime(event.startsAt)}</span>}<button onClick={() => go(`register/${event._id}`)}>Register</button></article>)}</div> : <p className="empty-category">No {title.toLowerCase()} events are open yet.</p>}</section>; })}{!events.length && <p>No active events yet. The admin will publish them here.</p>}</section>; }
+function Home({ events, sponsors, go }) {
+  const visibleSponsors = [
+    ...fallbackSponsors.map(([name, file]) => [name, `/sponsors/${file}`]),
+    ...sponsors.map((item) => [item.name, item.imageUrl]),
+  ];
+  return (
+    <>
+      <section className="home-hero">
+        <p className="eyebrow">
+          25 YEARS OF LEGACY · ELEVATE · INNOVATE · INSPIRE
+        </p>
+        <h1 className="aarohan-title">Abstract Aarohan</h1>
+        <h2>The ascent continues</h2>
+        <p>
+          Where management, sport, and culture converge under one constellation.
+        </p>
+        <div>
+          <button onClick={() => go("events")}>Explore events</button>
+          <button className="ghost" onClick={() => go("register")}>
+            Register now
+          </button>
+        </div>
+      </section>
+      <section className="sponsors-section">
+        <p className="eyebrow">OUR SPONSORS</p>
+        <h2>Powered by our partners</h2>
+        <div className="sponsor-marquee" aria-label="Aarohan sponsors">
+          <div className="sponsor-track">
+            {[...visibleSponsors, ...visibleSponsors].map(
+              ([name, imageUrl], index) => (
+                <div
+                  className="sponsor-logo"
+                  key={`${imageUrl}-${index}`}
+                  aria-hidden={index >= visibleSponsors.length}
+                >
+                  <img src={imageUrl} alt={name} />
+                </div>
+              ),
+            )}
+          </div>
+        </div>
+      </section>
+      <section className="home-section compact">
+        <h2>
+          {events.length
+            ? `${events.length} events are open`
+            : "Events are launching soon"}
+        </h2>
+        <button onClick={() => go("events")}>View event catalogue</button>
+      </section>
+    </>
+  );
+}
+function EventExplorer({ events, go }) {
+  const categories = [
+    ["SPORT", "Sports"],
+    ["MANAGEMENT", "Management"],
+    ["CULTURAL", "Cultural"],
+  ];
+  return (
+    <section className="catalogue">
+      <p className="eyebrow">EVENT CATALOGUE</p>
+      <h1>Choose your challenge</h1>
+      {categories.map(([key, title]) => {
+        const categoryEvents = events.filter((event) => event.category === key);
+        return (
+          <section className="category-section" key={key}>
+            <p className="eyebrow">{title.toUpperCase()}</p>
+            <h2>{title} events</h2>
+            {categoryEvents.length ? (
+              <div className="event-grid">
+                {categoryEvents.map((event) => (
+                  <article key={event._id}>
+                    <p>
+                      {event.format} · {event.venue || "Venue TBA"}
+                    </p>
+                    <h3>{event.name}</h3>
+                    <span>Registration fees: {money.format(event.fee)}</span>
+                    {event.startsAt && (
+                      <span className="event-date">
+                        Date & time: {eventDateTime(event.startsAt)}
+                      </span>
+                    )}
+                    <button onClick={() => go(`register/${event._id}`)}>
+                      Register
+                    </button>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-category">
+                No {title.toLowerCase()} events are open yet.
+              </p>
+            )}
+          </section>
+        );
+      })}
+      {!events.length && (
+        <p>No active events yet. The admin will publish them here.</p>
+      )}
+    </section>
+  );
+}
 
-function Login({ onLogin }) { const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); return <section className="auth"><form onSubmit={async (e) => { e.preventDefault(); try { onLogin(await call('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) })); } catch (x) { setError(x.message); } }}><h2>Staff sign in</h2><label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></label><label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label><button>Sign in</button>{error && <p className="message">{error}</p>}</form></section>; }
-function PassLookup() { const [registrationId, setRegistrationId] = useState(''); const [email, setEmail] = useState(''); const [pass, setPass] = useState(null); const [notice, setNotice] = useState(''); return <section className="auth"><form onSubmit={async (e) => { e.preventDefault(); try { setPass(await call('/registrations/pass-lookup', { method: 'POST', body: JSON.stringify({ registrationId, email }) })); setNotice(''); } catch (x) { setNotice(x.message); } }}><h2>Get your QR pass</h2>{pass ? <div className="ticket"><QRCodeSVG value={`AAROHAN:${pass.token}`} size={220} /><h3>{pass.event}</h3><b>{pass.participant}</b><p>{pass.registrationId}</p><p>{pass.venue || 'Venue to be announced'}</p><button type="button" onClick={() => window.print()}>Print / Save pass</button></div> : <><label>Registration ID<input value={registrationId} onChange={(e) => setRegistrationId(e.target.value)} required /></label><label>Registration email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></label><button>Find pass</button></>}{notice && <p className="message">{notice}</p>}</form></section>; }
+function Login({ onLogin }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  return (
+    <section className="auth">
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          try {
+            onLogin(
+              await call("/auth/login", {
+                method: "POST",
+                body: JSON.stringify({ email, password }),
+              }),
+            );
+          } catch (x) {
+            setError(x.message);
+          }
+        }}
+      >
+        <h2>Staff sign in</h2>
+        <label>
+          Email
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </label>
+        <label>
+          Password
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </label>
+        <button>Sign in</button>
+        {error && <p className="message">{error}</p>}
+      </form>
+    </section>
+  );
+}
+function PassLookup() {
+  const [registrationId, setRegistrationId] = useState("");
+  const [email, setEmail] = useState("");
+  const [pass, setPass] = useState(null);
+  const [notice, setNotice] = useState("");
+  return (
+    <section className="auth">
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          try {
+            setPass(
+              await call("/registrations/pass-lookup", {
+                method: "POST",
+                body: JSON.stringify({ registrationId, email }),
+              }),
+            );
+            setNotice("");
+          } catch (x) {
+            setNotice(x.message);
+          }
+        }}
+      >
+        <h2>Get your QR pass</h2>
+        {pass ? (
+          <div className="ticket">
+            <QRCodeSVG value={`AAROHAN:${pass.token}`} size={220} />
+            <h3>{pass.event}</h3>
+            <b>{pass.participant}</b>
+            <p>{pass.registrationId}</p>
+            <p>{pass.venue || "Venue to be announced"}</p>
+            <button type="button" onClick={() => window.print()}>
+              Print / Save pass
+            </button>
+          </div>
+        ) : (
+          <>
+            <label>
+              Registration ID
+              <input
+                value={registrationId}
+                onChange={(e) => setRegistrationId(e.target.value)}
+                required
+              />
+            </label>
+            <label>
+              Registration email
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </label>
+            <button>Find pass</button>
+          </>
+        )}
+        {notice && <p className="message">{notice}</p>}
+      </form>
+    </section>
+  );
+}
 
-function Staff({ session, events, refresh }) { const [records, setRecords] = useState([]); const [notice, setNotice] = useState(''); const [tab, setTab] = useState('overview'); const load = () => call('/registrations', { token: session.token }).then(setRecords).catch((e) => setNotice(e.message)); useEffect(() => { load(); }, [tab]); const act = async (path, body, method = 'PATCH') => { try { await call(path, { token: session.token, method, body: JSON.stringify(body) }); setNotice('Saved.'); load(); } catch (e) { setNotice(e.message); } }; return <section className="staff"><div className="tabs">{['overview','events', 'staff', 'finance', 'cct', 'gate', 'judge', 'leaderboard'].filter((x) => x === 'overview' || session.user.role === 'SUPER_ADMIN' || x === session.user.role.toLowerCase() || x === 'leaderboard').map((x) => <button className={tab === x ? 'active' : ''} key={x} onClick={() => setTab(x)}>{x}</button>)}</div>{notice && <p className="message">{notice}</p>}{tab === 'overview' && <Overview events={events} records={records} role={session.user.role} />}{tab === 'events' && <EventAdmin token={session.token} events={events} refresh={refresh} setNotice={setNotice} />}{tab === 'staff' && <><StaffAdmin token={session.token} events={events} setNotice={setNotice} /><StaffAssignments token={session.token} events={events} setNotice={setNotice} /></>}{tab === 'finance' && <Finance records={records} act={act} />}{tab === 'cct' && <Roster records={records} events={events} token={session.token} />}{tab === 'gate' && <Gate token={session.token} setNotice={setNotice} />}{tab === 'judge' && <Judge records={records} act={act} />}{tab === 'leaderboard' && <Leaderboard events={events} />}</section>; }
-function Overview({ events, records, role }) { const approved = records.filter((x) => x.payment?.status === 'APPROVED').length; const checkedIn = records.filter((x) => x.status === 'CHECKED_IN').length; return <div><p className="eyebrow">{role} COMMAND CENTRE</p><h2>Festival overview</h2><div className="metric-grid"><article><b>{events.length}</b><span>Active events</span></article><article><b>{records.length}</b><span>Registrations</span></article><article><b>{approved}</b><span>Approved payments</span></article><article><b>{checkedIn}</b><span>Checked in</span></article></div><div className="event-note">Use the tabs above to manage the work assigned to your role. All changes are recorded in the audit log.</div></div>; }
+function Staff({ session, events, refresh }) {
+  const [records, setRecords] = useState([]);
+  const [notice, setNotice] = useState("");
+  const [tab, setTab] = useState("overview");
+  const load = () =>
+    call("/registrations", { token: session.token })
+      .then(setRecords)
+      .catch((e) => setNotice(e.message));
+  useEffect(() => {
+    load();
+  }, [tab]);
+  const act = async (path, body, method = "PATCH") => {
+    try {
+      await call(path, {
+        token: session.token,
+        method,
+        body: JSON.stringify(body),
+      });
+      setNotice("Saved.");
+      load();
+    } catch (e) {
+      setNotice(e.message);
+    }
+  };
+  return (
+    <section className="staff">
+      <div className="tabs">
+        {[
+          "overview",
+          "events",
+          "staff",
+          "finance",
+          "cct",
+          "gate",
+          "judge",
+          "leaderboard",
+        ]
+          .filter(
+            (x) =>
+              x === "overview" ||
+              session.user.role === "SUPER_ADMIN" ||
+              x === session.user.role.toLowerCase() ||
+              x === "leaderboard",
+          )
+          .map((x) => (
+            <button
+              className={tab === x ? "active" : ""}
+              key={x}
+              onClick={() => setTab(x)}
+            >
+              {x}
+            </button>
+          ))}
+      </div>
+      {notice && <p className="message">{notice}</p>}
+      {tab === "overview" && (
+        <Overview events={events} records={records} role={session.user.role} />
+      )}
+      {tab === "events" && (
+        <EventAdmin
+          token={session.token}
+          events={events}
+          refresh={refresh}
+          setNotice={setNotice}
+        />
+      )}
+      {tab === "staff" && (
+        <>
+          <StaffAdmin
+            token={session.token}
+            events={events}
+            setNotice={setNotice}
+          />
+          <StaffAssignments
+            token={session.token}
+            events={events}
+            setNotice={setNotice}
+          />
+        </>
+      )}
+      {tab === "finance" && <Finance records={records} act={act} />}
+      {tab === "cct" && (
+        <Roster records={records} events={events} token={session.token} />
+      )}
+      {tab === "gate" && <Gate token={session.token} setNotice={setNotice} />}
+      {tab === "judge" && <Judge records={records} act={act} />}
+      {tab === "leaderboard" && <Leaderboard events={events} />}
+    </section>
+  );
+}
+function Overview({ events, records, role }) {
+  const approved = records.filter(
+    (x) => x.payment?.status === "APPROVED",
+  ).length;
+  const checkedIn = records.filter((x) => x.status === "CHECKED_IN").length;
+  return (
+    <div>
+      <p className="eyebrow">{role} COMMAND CENTRE</p>
+      <h2>Festival overview</h2>
+      <div className="metric-grid">
+        <article>
+          <b>{events.length}</b>
+          <span>Active events</span>
+        </article>
+        <article>
+          <b>{records.length}</b>
+          <span>Registrations</span>
+        </article>
+        <article>
+          <b>{approved}</b>
+          <span>Approved payments</span>
+        </article>
+        <article>
+          <b>{checkedIn}</b>
+          <span>Checked in</span>
+        </article>
+      </div>
+      <div className="event-note">
+        Use the tabs above to manage the work assigned to your role. All changes
+        are recorded in the audit log.
+      </div>
+    </div>
+  );
+}
 function EventAdmin({ token, events, refresh, setNotice }) {
-  const [data, setData] = useState({ name:'', category:'SPORT', fee:'', format:'SOLO', rules:'', venue:'', startsAt:'', upiId:'', paymentInstructions:'', formFields:[] }); const [fields, setFields] = useState(''); const [qr, setQr] = useState(null);
-  const input = (key, type='text') => key === 'category'
-    ? <label>Event category<select value={data.category} onChange={(e) => setData({ ...data, category:e.target.value })}><option value="SPORT">Sport</option><option value="MANAGEMENT">Management</option><option value="CULTURAL">Cultural</option></select></label>
-    : key === 'format'
-    ? <label>format<select value={data.format} onChange={(e) => setData({ ...data, format:e.target.value })}><option value="SOLO">SOLO</option><option value="TEAM">TEAM</option></select></label>
-    : <label>{key === 'startsAt' ? 'Event date & time' : key}<input required={['name','fee','startsAt'].includes(key)} min={type === 'number' ? 0 : undefined} type={type} value={data[key]} onChange={(e) => setData({ ...data, [key]: e.target.value })} /></label>;
-  const submit = async (e) => { e.preventDefault(); try { let upiQrUrl = ''; if (qr) { const fd = new FormData(); fd.append('qr', qr); upiQrUrl = (await call('/uploads/upi-qr', { token, method:'POST', body:fd })).url; } const formFields = fields.split(',').map((label) => label.trim()).filter(Boolean).map((label) => ({ label, key: label.toLowerCase().replace(/[^a-z0-9]+/g, '_'), type:'TEXT', required:true })); const payload = Object.fromEntries(Object.entries(data).map(([key, value]) => [key, key === 'fee' && value !== '' ? Number(value) : value])); await call('/events', { token, method:'POST', body:JSON.stringify({ ...payload, upiQrUrl, formFields }) }); setNotice('Event and registration form created.'); refresh(); } catch (x) { setNotice(x.message); } };
-  return <div><h2>Event form generator</h2><form onSubmit={submit}><div className="grid">{input('name')}{input('category')}{input('fee','number')}{input('format')}{input('venue')}{input('startsAt','datetime-local')}{input('upiId')}</div><label>Rules<textarea value={data.rules} onChange={(e) => setData({ ...data, rules:e.target.value })} /></label><label>Payment instructions<textarea placeholder="Example: Pay exact amount to UPI ID, then enter UTR." value={data.paymentInstructions} onChange={(e) => setData({ ...data, paymentInstructions:e.target.value })} /></label><label>UPI QR image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setQr(e.target.files[0])} /></label><label>Extra registration fields (comma separated)<input placeholder="Example: Branch, T-shirt size, Instagram handle" value={fields} onChange={(e) => setFields(e.target.value)} /></label><button>Create event and form</button></form><Table rows={events} cols={['name','category','format','fee','venue','startsAt']} /></div>;
+  const [data, setData] = useState({
+    name: "",
+    category: "SPORT",
+    fee: "",
+    format: "SOLO",
+    rules: "",
+    venue: "",
+    startsAt: "",
+    upiId: "",
+    paymentInstructions: "",
+    formFields: [],
+  });
+  const [fields, setFields] = useState("");
+  const [qr, setQr] = useState(null);
+  const input = (key, type = "text") =>
+    key === "category" ? (
+      <label>
+        Event category
+        <select
+          value={data.category}
+          onChange={(e) => setData({ ...data, category: e.target.value })}
+        >
+          <option value="SPORT">Sport</option>
+          <option value="MANAGEMENT">Management</option>
+          <option value="CULTURAL">Cultural</option>
+        </select>
+      </label>
+    ) : key === "format" ? (
+      <label>
+        format
+        <select
+          value={data.format}
+          onChange={(e) => setData({ ...data, format: e.target.value })}
+        >
+          <option value="SOLO">SOLO</option>
+          <option value="TEAM">TEAM</option>
+        </select>
+      </label>
+    ) : (
+      <label>
+        {key === "startsAt" ? "Event date & time" : key}
+        <input
+          required={["name", "fee", "startsAt"].includes(key)}
+          min={type === "number" ? 0 : undefined}
+          type={type}
+          value={data[key]}
+          onChange={(e) => setData({ ...data, [key]: e.target.value })}
+        />
+      </label>
+    );
+  const submit = async (e) => {
+    e.preventDefault();
+    try {
+      let upiQrUrl = "";
+      if (qr) {
+        const fd = new FormData();
+        fd.append("qr", qr);
+        upiQrUrl = (
+          await call("/uploads/upi-qr", { token, method: "POST", body: fd })
+        ).url;
+      }
+      const formFields = fields
+        .split(",")
+        .map((label) => label.trim())
+        .filter(Boolean)
+        .map((label) => ({
+          label,
+          key: label.toLowerCase().replace(/[^a-z0-9]+/g, "_"),
+          type: "TEXT",
+          required: true,
+        }));
+      const payload = Object.fromEntries(
+        Object.entries(data).map(([key, value]) => [
+          key,
+          key === "fee" && value !== "" ? Number(value) : value,
+        ]),
+      );
+      await call("/events", {
+        token,
+        method: "POST",
+        body: JSON.stringify({ ...payload, upiQrUrl, formFields }),
+      });
+      setNotice("Event and registration form created.");
+      refresh();
+    } catch (x) {
+      setNotice(x.message);
+    }
+  };
+  return (
+    <div>
+      <h2>Event form generator</h2>
+      <form onSubmit={submit}>
+        <div className="grid">
+          {input("name")}
+          {input("category")}
+          {input("fee", "number")}
+          {input("format")}
+          {input("venue")}
+          {input("startsAt", "datetime-local")}
+          {input("upiId")}
+        </div>
+        <label>
+          Rules
+          <textarea
+            value={data.rules}
+            onChange={(e) => setData({ ...data, rules: e.target.value })}
+          />
+        </label>
+        <label>
+          Payment instructions
+          <textarea
+            placeholder="Example: Pay exact amount to UPI ID, then enter UTR."
+            value={data.paymentInstructions}
+            onChange={(e) =>
+              setData({ ...data, paymentInstructions: e.target.value })
+            }
+          />
+        </label>
+        <label>
+          UPI QR image
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={(e) => setQr(e.target.files[0])}
+          />
+        </label>
+        <label>
+          Extra registration fields (comma separated)
+          <input
+            placeholder="Example: Branch, T-shirt size, Instagram handle"
+            value={fields}
+            onChange={(e) => setFields(e.target.value)}
+          />
+        </label>
+        <button>Create event and form</button>
+      </form>
+      <Table
+        rows={events}
+        cols={["name", "category", "format", "fee", "venue", "startsAt"]}
+      />
+    </div>
+  );
 }
 function StaffAdmin({ token, events, setNotice }) {
   const [users, setUsers] = useState([]);
-  const [data, setData] = useState({ name: '', email: '', password: '', role: 'FINANCE' });
-  const load = () => call('/auth/users', { token }).then(setUsers).catch((e) => setNotice(e.message));
-  useEffect(() => { void load(); }, []);
-  const roles = ['SUPER_ADMIN', 'FINANCE', 'CCT', 'GATE', 'JUDGE'];
+  const [data, setData] = useState({
+    name: "",
+    email: "",
+    password: "",
+    role: "FINANCE",
+  });
+  const load = () =>
+    call("/auth/users", { token })
+      .then(setUsers)
+      .catch((e) => setNotice(e.message));
+  useEffect(() => {
+    void load();
+  }, []);
+  const roles = ["SUPER_ADMIN", "FINANCE", "CCT", "GATE", "JUDGE"];
 
-  return <div>
-    <h2>Staff and event permissions</h2>
-    <form onSubmit={async (e) => {
-      e.preventDefault();
-      try {
-        // Assign all events to the user by default
-        const body = { ...data, assignedEvents: events.map((x) => x._id) };
-        await call('/auth/users', { token, method: 'POST', body: JSON.stringify(body) });
-        setNotice('Staff account created.');
-        load();
-      } catch (x) { setNotice(x.message); }
-    }}>
-      <div className="grid">
-        <label>name<input value={data.name} onChange={(e) => setData({ ...data, name: e.target.value })} required /></label>
-        <label>email<input type="email" value={data.email} onChange={(e) => setData({ ...data, email: e.target.value })} required /></label>
-        <label>password<input type="password" value={data.password} onChange={(e) => setData({ ...data, password: e.target.value })} required /></label>
-        <label>role
-          <select value={data.role} onChange={(e) => setData({ ...data, role: e.target.value })}>
-            {roles.map((r) => <option key={r} value={r}>{r}</option>)}
+  return (
+    <div>
+      <h2>Staff and event permissions</h2>
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          try {
+            // Assign all events to the user by default
+            const body = { ...data, assignedEvents: events.map((x) => x._id) };
+            await call("/auth/users", {
+              token,
+              method: "POST",
+              body: JSON.stringify(body),
+            });
+            setNotice("Staff account created.");
+            load();
+          } catch (x) {
+            setNotice(x.message);
+          }
+        }}
+      >
+        <div className="grid">
+          <label>
+            name
+            <input
+              value={data.name}
+              onChange={(e) => setData({ ...data, name: e.target.value })}
+              required
+            />
+          </label>
+          <label>
+            email
+            <input
+              type="email"
+              value={data.email}
+              onChange={(e) => setData({ ...data, email: e.target.value })}
+              required
+            />
+          </label>
+          <label>
+            password
+            <input
+              type="password"
+              value={data.password}
+              onChange={(e) => setData({ ...data, password: e.target.value })}
+              required
+            />
+          </label>
+          <label>
+            role
+            <select
+              value={data.role}
+              onChange={(e) => setData({ ...data, role: e.target.value })}
+            >
+              {roles.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <button>Create staff account</button>
+      </form>
+      <Table rows={users} cols={["name", "email", "role"]} />
+    </div>
+  );
+}
+function PaymentProof({ url }) {
+  return url ? (
+    <a className="proof-link" href={url} target="_blank" rel="noreferrer">
+      View screenshot
+    </a>
+  ) : (
+    <span className="no-proof">No screenshot</span>
+  );
+}
+function Finance({ records, act }) {
+  const approved = records.filter(
+    (record) => record.payment?.status === "APPROVED",
+  );
+  const pending = records.filter(
+    (record) => record.payment?.status === "PENDING",
+  );
+  const receivedRevenue = approved.reduce(
+    (total, record) => total + Number(record.payment?.amount || 0),
+    0,
+  );
+  const pendingRevenue = pending.reduce(
+    (total, record) => total + Number(record.payment?.amount || 0),
+    0,
+  );
+  const eventRevenue = Object.values(
+    approved.reduce((groups, record) => {
+      const id = record.event?._id || record.event?.name || "unknown";
+      if (!groups[id])
+        groups[id] = {
+          _id: id,
+          event: record.event?.name || "Event unavailable",
+          approvedRegistrations: 0,
+          revenue: 0,
+        };
+      groups[id].approvedRegistrations += 1;
+      groups[id].revenue += Number(record.payment?.amount || 0);
+      return groups;
+    }, {}),
+  ).map((row) => ({ ...row, revenue: money.format(row.revenue) }));
+  const decide = (record, status) => {
+    const verb = status === "APPROVED" ? "approve" : "reject";
+    if (
+      confirmAction(
+        `Do you want to ${verb} payment for ${record.registrationId}?`,
+      )
+    )
+      act(
+        `/registrations/${record._id}/payment`,
+        status === "APPROVED"
+          ? { status }
+          : { status, note: "Proof needs correction" },
+      );
+  };
+  return (
+    <div>
+      <h2>Payment verification</h2>
+      <h3>Pending review</h3>
+      <Table
+        rows={pending}
+        cols={[
+          "registrationId",
+          "event.name",
+          "leader.name",
+          "payment.amount",
+          "payment.utr",
+        ]}
+        actions={(x) => (
+          <>
+            <PaymentProof url={x.payment.screenshotUrl} />
+            <button onClick={() => decide(x, "APPROVED")}>Approve</button>
+            <button className="danger" onClick={() => decide(x, "REJECTED")}>
+              Reject
+            </button>
+          </>
+        )}
+      />
+      <h3>Approved passes</h3>
+      <Table
+        rows={approved}
+        cols={["registrationId", "event.name", "leader.name", "leader.email"]}
+        actions={(x) => (
+          <>
+            <PaymentProof url={x.payment.screenshotUrl} />
+            <button
+              onClick={() => {
+                if (
+                  confirmAction(`Resend the QR pass for ${x.registrationId}?`)
+                )
+                  act(`/registrations/${x._id}/resend-pass`, {}, "POST");
+              }}
+            >
+              Resend QR pass
+            </button>
+          </>
+        )}
+      />
+      <h3>Revenue summary</h3>
+      <div className="metric-grid finance-revenue">
+        <article>
+          <b>{money.format(receivedRevenue)}</b>
+          <span>Revenue received</span>
+        </article>
+        <article>
+          <b>{approved.length}</b>
+          <span>Approved payments</span>
+        </article>
+        <article>
+          <b>{money.format(pendingRevenue)}</b>
+          <span>Pending verification</span>
+        </article>
+        <article>
+          <b>{pending.length}</b>
+          <span>Pending payments</span>
+        </article>
+      </div>
+      <p className="event-note">
+        Revenue received includes only Finance-approved participant payments.
+      </p>
+      <h3>Event-wise revenue</h3>
+      <Table
+        rows={eventRevenue}
+        cols={["event", "approvedRegistrations", "revenue"]}
+      />
+    </div>
+  );
+}
+function StaffAssignments({ token, events, setNotice }) {
+  const [users, setUsers] = useState([]);
+  const [userId, setUserId] = useState("");
+  const [assignedEvents, setAssignedEvents] = useState([]);
+  const load = () =>
+    call("/auth/users", { token })
+      .then(setUsers)
+      .catch((e) => setNotice(e.message));
+  useEffect(() => {
+    void load();
+  }, []);
+  const choose = (id) => {
+    setUserId(id);
+    const user = users.find((item) => item._id === id);
+    setAssignedEvents(user?.assignedEvents?.map((event) => event._id) || []);
+  };
+  const assignAll = async () => {
+    if (
+      !confirmAction(
+        "Assign every active event to all existing staff accounts?",
+      )
+    )
+      return;
+    try {
+      await call("/auth/users/assign-all-events", {
+        token,
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      setNotice("All existing staff now have access to every active event.");
+      load();
+    } catch (error) {
+      setNotice(error.message);
+    }
+  };
+  const saveOverride = async () => {
+    if (!confirmAction("Save this staff member’s event access override?"))
+      return;
+    try {
+      await call(`/auth/users/${userId}`, {
+        token,
+        method: "PATCH",
+        body: JSON.stringify({ assignedEvents }),
+      });
+      setNotice("Event permissions updated.");
+      load();
+    } catch (error) {
+      setNotice(error.message);
+    }
+  };
+  return (
+    <section className="assignment-card">
+      <h2>Event access</h2>
+      <p>
+        Every staff account is automatically assigned to every active event.
+      </p>
+      <button onClick={assignAll}>Assign all events to existing staff</button>
+      <details>
+        <summary>Optional individual override</summary>
+        <label>
+          Staff account
+          <select value={userId} onChange={(e) => choose(e.target.value)}>
+            <option value="">Choose staff account</option>
+            {users
+              .filter((user) => user.role !== "SUPER_ADMIN")
+              .map((user) => (
+                <option value={user._id} key={user._id}>
+                  {user.name} — {user.role}
+                </option>
+              ))}
           </select>
         </label>
-      </div>
-
-      <button>Create staff account</button>
-    </form>
-    <Table rows={users} cols={['name', 'email', 'role']} />
-  </div>;
+        <label>
+          Allowed events
+          <select
+            multiple
+            value={assignedEvents}
+            onChange={(e) =>
+              setAssignedEvents(
+                [...e.target.selectedOptions].map((option) => option.value),
+              )
+            }
+          >
+            {events.map((event) => (
+              <option value={event._id} key={event._id}>
+                {event.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button disabled={!userId} onClick={saveOverride}>
+          Save individual override
+        </button>
+      </details>
+    </section>
+  );
 }
-function PaymentProof({ url }) { return url ? <a className="proof-link" href={url} target="_blank" rel="noreferrer">View screenshot</a> : <span className="no-proof">No screenshot</span>; }
-function Finance({ records, act }) { const approved = records.filter((record) => record.payment?.status === 'APPROVED'); const pending = records.filter((record) => record.payment?.status === 'PENDING'); const receivedRevenue = approved.reduce((total, record) => total + Number(record.payment?.amount || 0), 0); const pendingRevenue = pending.reduce((total, record) => total + Number(record.payment?.amount || 0), 0); const eventRevenue = Object.values(approved.reduce((groups, record) => { const id = record.event?._id || record.event?.name || 'unknown'; if (!groups[id]) groups[id] = { _id: id, event: record.event?.name || 'Event unavailable', approvedRegistrations: 0, revenue: 0 }; groups[id].approvedRegistrations += 1; groups[id].revenue += Number(record.payment?.amount || 0); return groups; }, {})).map((row) => ({ ...row, revenue: money.format(row.revenue) })); const decide = (record, status) => { const verb = status === 'APPROVED' ? 'approve' : 'reject'; if (confirmAction(`Do you want to ${verb} payment for ${record.registrationId}?`)) act(`/registrations/${record._id}/payment`, status === 'APPROVED' ? { status } : { status, note: 'Proof needs correction' }); }; return <div><h2>Payment verification</h2><h3>Pending review</h3><Table rows={pending} cols={['registrationId', 'event.name', 'leader.name', 'payment.amount', 'payment.utr']} actions={(x) => <><PaymentProof url={x.payment.screenshotUrl} /><button onClick={() => decide(x, 'APPROVED')}>Approve</button><button className="danger" onClick={() => decide(x, 'REJECTED')}>Reject</button></>} /><h3>Approved passes</h3><Table rows={approved} cols={['registrationId', 'event.name', 'leader.name', 'leader.email']} actions={(x) => <><PaymentProof url={x.payment.screenshotUrl} /><button onClick={() => { if (confirmAction(`Resend the QR pass for ${x.registrationId}?`)) act(`/registrations/${x._id}/resend-pass`, {}, 'POST'); }}>Resend QR pass</button></>} /><h3>Revenue summary</h3><div className="metric-grid finance-revenue"><article><b>{money.format(receivedRevenue)}</b><span>Revenue received</span></article><article><b>{approved.length}</b><span>Approved payments</span></article><article><b>{money.format(pendingRevenue)}</b><span>Pending verification</span></article><article><b>{pending.length}</b><span>Pending payments</span></article></div><p className="event-note">Revenue received includes only Finance-approved participant payments.</p><h3>Event-wise revenue</h3><Table rows={eventRevenue} cols={['event', 'approvedRegistrations', 'revenue']} /></div>; }
-function StaffAssignments({ token, events, setNotice }) { const [users, setUsers] = useState([]); const [userId, setUserId] = useState(''); const [assignedEvents, setAssignedEvents] = useState([]); const load = () => call('/auth/users', { token }).then(setUsers).catch((e) => setNotice(e.message)); useEffect(() => { void load(); }, []); const choose = (id) => { setUserId(id); const user = users.find((item) => item._id === id); setAssignedEvents(user?.assignedEvents?.map((event) => event._id) || []); }; const assignAll = async () => { if (!confirmAction('Assign every active event to all existing staff accounts?')) return; try { await call('/auth/users/assign-all-events', { token, method:'POST', body:JSON.stringify({}) }); setNotice('All existing staff now have access to every active event.'); load(); } catch (error) { setNotice(error.message); } }; const saveOverride = async () => { if (!confirmAction('Save this staff member’s event access override?')) return; try { await call(`/auth/users/${userId}`, { token, method:'PATCH', body:JSON.stringify({ assignedEvents }) }); setNotice('Event permissions updated.'); load(); } catch (error) { setNotice(error.message); } }; return <section className="assignment-card"><h2>Event access</h2><p>Every staff account is automatically assigned to every active event.</p><button onClick={assignAll}>Assign all events to existing staff</button><details><summary>Optional individual override</summary><label>Staff account<select value={userId} onChange={(e) => choose(e.target.value)}><option value="">Choose staff account</option>{users.filter((user) => user.role !== 'SUPER_ADMIN').map((user) => <option value={user._id} key={user._id}>{user.name} — {user.role}</option>)}</select></label><label>Allowed events<select multiple value={assignedEvents} onChange={(e) => setAssignedEvents([...e.target.selectedOptions].map((option) => option.value))}>{events.map((event) => <option value={event._id} key={event._id}>{event.name}</option>)}</select></label><button disabled={!userId} onClick={saveOverride}>Save individual override</button></details></section>; }
 function Roster({ records, events, token }) {
-  const [category, setCategory] = useState(''); const [eventId, setEventId] = useState('');
-  const categoryEvents = events.filter((item) => !category || item.category === category);
+  const [category, setCategory] = useState("");
+  const [eventId, setEventId] = useState("");
+  const categoryEvents = events.filter(
+    (item) => !category || item.category === category,
+  );
   const roster = records.filter((record) => record.event?._id === eventId);
   const event = events.find((item) => item._id === eventId);
   const download = async () => {
     if (!eventId) return;
-    const response = await fetch(`${API}/registrations/export/event/${eventId}`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!response.ok) { alert('Could not export this roster. Please try again.'); return; }
-    const blob = await response.blob(); const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `${event?.name || 'event'}-roster.csv` }); a.click(); URL.revokeObjectURL(a.href);
+    const response = await fetch(
+      `${API}/registrations/export/event/${eventId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!response.ok) {
+      alert("Could not export this roster. Please try again.");
+      return;
+    }
+    const blob = await response.blob();
+    const a = Object.assign(document.createElement("a"), {
+      href: URL.createObjectURL(blob),
+      download: `${event?.name || "event"}-roster.csv`,
+    });
+    a.click();
+    URL.revokeObjectURL(a.href);
   };
-  const downloadCategory = async () => { if (!category) return; const response = await fetch(`${API}/registrations/export/category/${category}`, { headers: { Authorization: `Bearer ${token}` } }); if (!response.ok) { alert('Could not export this category.'); return; } const blob = await response.blob(); const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `${category.toLowerCase()}-category-roster.csv` }); a.click(); URL.revokeObjectURL(a.href); };
-  const downloadWorkbook = async () => { const response = await fetch(`${API}/registrations/export/categories-workbook`, { headers: { Authorization: `Bearer ${token}` } }); if (!response.ok) { alert('Could not create the category workbook. Please try again.'); return; } const blob = await response.blob(); const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'abstract-aarohan-category-rosters.xlsx' }); a.click(); URL.revokeObjectURL(a.href); };
-  return <div><p className="eyebrow">CCT EVENT MANAGEMENT</p><h2>Category and event-wise roster</h2><button onClick={downloadWorkbook}>Download all categories Excel workbook</button><p className="event-note">The workbook contains separate Sports, Management, and Cultural tabs.</p><div className="grid"><label>1. Choose category<select value={category} onChange={(e) => { setCategory(e.target.value); setEventId(''); }}><option value="">All categories</option><option value="SPORT">Sport</option><option value="MANAGEMENT">Management</option><option value="CULTURAL">Cultural</option></select></label><label>2. Choose event<select value={eventId} onChange={(e) => setEventId(e.target.value)}><option value="">Select an event</option>{categoryEvents.map((item) => <option key={item._id} value={item._id}>{item.name} ({item.category})</option>)}</select></label></div>{category && <button onClick={downloadCategory}>Download all {category.toLowerCase()} participants CSV</button>}{eventId && <><div className="metric-grid"><article><b>{roster.length}</b><span>Total registrations</span></article><article><b>{roster.filter((item) => item.payment?.status === 'APPROVED').length}</b><span>Approved</span></article><article><b>{roster.filter((item) => item.status === 'CHECKED_IN').length}</b><span>Checked in</span></article><article><b>{event?.capacity || '—'}</b><span>Capacity</span></article></div><button onClick={download}>Download {event?.name} CSV</button><Table rows={roster} cols={['registrationId', 'leader.name', 'leader.email', 'leader.phone', 'teamName', 'payment.amount', 'payment.status', 'status']} /></>}{!eventId && <div className="event-note">Choose a category to download every participant in that category, or choose an event for its individual roster.</div>}</div>;
+  const downloadCategory = async () => {
+    if (!category) return;
+    const response = await fetch(
+      `${API}/registrations/export/category/${category}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!response.ok) {
+      alert("Could not export this category.");
+      return;
+    }
+    const blob = await response.blob();
+    const a = Object.assign(document.createElement("a"), {
+      href: URL.createObjectURL(blob),
+      download: `${category.toLowerCase()}-category-roster.csv`,
+    });
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  const downloadWorkbook = async () => {
+    const response = await fetch(
+      `${API}/registrations/export/categories-workbook`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!response.ok) {
+      alert("Could not create the category workbook. Please try again.");
+      return;
+    }
+    const blob = await response.blob();
+    const a = Object.assign(document.createElement("a"), {
+      href: URL.createObjectURL(blob),
+      download: "abstract-aarohan-category-rosters.xlsx",
+    });
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  return (
+    <div>
+      <p className="eyebrow">CCT EVENT MANAGEMENT</p>
+      <h2>Category and event-wise roster</h2>
+      <button onClick={downloadWorkbook}>
+        Download all categories Excel workbook
+      </button>
+      <p className="event-note">
+        The workbook contains separate Sports, Management, and Cultural tabs.
+      </p>
+      <div className="grid">
+        <label>
+          1. Choose category
+          <select
+            value={category}
+            onChange={(e) => {
+              setCategory(e.target.value);
+              setEventId("");
+            }}
+          >
+            <option value="">All categories</option>
+            <option value="SPORT">Sport</option>
+            <option value="MANAGEMENT">Management</option>
+            <option value="CULTURAL">Cultural</option>
+          </select>
+        </label>
+        <label>
+          2. Choose event
+          <select value={eventId} onChange={(e) => setEventId(e.target.value)}>
+            <option value="">Select an event</option>
+            {categoryEvents.map((item) => (
+              <option key={item._id} value={item._id}>
+                {item.name} ({item.category})
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {category && (
+        <button onClick={downloadCategory}>
+          Download all {category.toLowerCase()} participants CSV
+        </button>
+      )}
+      {eventId && (
+        <>
+          <div className="metric-grid">
+            <article>
+              <b>{roster.length}</b>
+              <span>Total registrations</span>
+            </article>
+            <article>
+              <b>
+                {
+                  roster.filter((item) => item.payment?.status === "APPROVED")
+                    .length
+                }
+              </b>
+              <span>Approved</span>
+            </article>
+            <article>
+              <b>
+                {roster.filter((item) => item.status === "CHECKED_IN").length}
+              </b>
+              <span>Checked in</span>
+            </article>
+            <article>
+              <b>{event?.capacity || "—"}</b>
+              <span>Capacity</span>
+            </article>
+          </div>
+          <button onClick={download}>Download {event?.name} CSV</button>
+          <Table
+            rows={roster}
+            cols={[
+              "registrationId",
+              "leader.name",
+              "leader.email",
+              "leader.phone",
+              "teamName",
+              "payment.amount",
+              "payment.status",
+              "status",
+            ]}
+          />
+        </>
+      )}
+      {!eventId && (
+        <div className="event-note">
+          Choose a category to download every participant in that category, or
+          choose an event for its individual roster.
+        </div>
+      )}
+    </div>
+  );
 }
-const compressSponsorImage = (file) => new Promise((resolve, reject) => {
-  const image = new Image(); const source = URL.createObjectURL(file);
-  image.onload = () => { try { const maxSide = 1600; const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight)); const canvas = document.createElement('canvas'); canvas.width = Math.max(1, Math.round(image.naturalWidth * scale)); canvas.height = Math.max(1, Math.round(image.naturalHeight * scale)); canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height); canvas.toBlob((blob) => { URL.revokeObjectURL(source); if (!blob) return reject(new Error('Could not compress image')); resolve(new File([blob], `${file.name.replace(/\.[^.]+$/, '') || 'sponsor'}.webp`, { type: 'image/webp' })); }, 'image/webp', 0.9); } catch (error) { URL.revokeObjectURL(source); reject(error); } };
-  image.onerror = () => { URL.revokeObjectURL(source); reject(new Error('Could not read image')); }; image.src = source;
-});
+const compressSponsorImage = (file) =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    const source = URL.createObjectURL(file);
+    image.onload = () => {
+      try {
+        const maxSide = 1600;
+        const scale = Math.min(
+          1,
+          maxSide / Math.max(image.naturalWidth, image.naturalHeight),
+        );
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        canvas
+          .getContext("2d")
+          .drawImage(image, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(
+          (blob) => {
+            URL.revokeObjectURL(source);
+            if (!blob) return reject(new Error("Could not compress image"));
+            resolve(
+              new File(
+                [blob],
+                `${file.name.replace(/\.[^.]+$/, "") || "sponsor"}.webp`,
+                { type: "image/webp" },
+              ),
+            );
+          },
+          "image/webp",
+          0.9,
+        );
+      } catch (error) {
+        URL.revokeObjectURL(source);
+        reject(error);
+      }
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(source);
+      reject(new Error("Could not read image"));
+    };
+    image.src = source;
+  });
 function SponsorAdmin({ token, refreshSponsors, requestConfirmation }) {
-  const [sponsors, setSponsors] = useState([]); const [name, setName] = useState(''); const [image, setImage] = useState(null); const [notice, setNotice] = useState('');
-  const load = () => call('/sponsors').then(setSponsors).catch((error) => setNotice(error.message));
-  useEffect(() => { void load(); }, []);
-  const submit = async (event) => { event.preventDefault(); if (!image) return setNotice('Choose a sponsor image first.'); try { setNotice('Compressing and uploading image…'); const compressed = await compressSponsorImage(image); const form = new FormData(); form.append('sponsor', compressed); const uploaded = await call('/uploads/sponsor', { token, method: 'POST', body: form }); await call('/sponsors', { token, method: 'POST', body: JSON.stringify({ name: name.trim() || image.name.replace(/\.[^.]+$/, ''), imageUrl: uploaded.url, imageFileId: uploaded.fileId }) }); setName(''); setImage(null); setNotice('Sponsor added to the home page.'); await refreshSponsors(); load(); } catch (error) { setNotice(error.message); } };
-  const remove = async (sponsor) => { requestConfirmation({ title: 'Delete sponsor?', message: `Delete sponsor “${sponsor.name}”? This cannot be undone.`, confirmLabel: 'Delete sponsor', danger: true, onConfirm: async () => { try { await call(`/sponsors/${sponsor._id}`, { token, method: 'DELETE' }); setNotice('Sponsor deleted.'); await refreshSponsors(); load(); } catch (error) { setNotice(error.message); } } }); };
-  return <section className="sponsor-admin"><h3>Home-page sponsors</h3><p className="event-note">Images are compressed in your browser to high-quality WebP before upload, reducing storage while preserving visual quality.</p><form onSubmit={submit}><label>Sponsor name<input placeholder="Example: Acme Foundation" value={name} onChange={(event) => setName(event.target.value)} /></label><label>Sponsor logo (PNG, JPG, or WebP)<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setImage(event.target.files?.[0] || null)} required /></label><button>Compress and upload sponsor</button>{notice && <p className="message">{notice}</p>}</form><div className="sponsor-admin-list">{sponsors.map((sponsor) => <article key={sponsor._id}><img src={sponsor.imageUrl} alt="" /><span>{sponsor.name}</span><button className="danger" onClick={() => remove(sponsor)}>Delete</button></article>)}{!sponsors.length && <p className="event-note">No uploaded sponsors yet. The supplied default sponsor logos remain visible until you upload one.</p>}</div></section>;
+  const [sponsors, setSponsors] = useState([]);
+  const [name, setName] = useState("");
+  const [image, setImage] = useState(null);
+  const [notice, setNotice] = useState("");
+  const load = () =>
+    call("/sponsors")
+      .then(setSponsors)
+      .catch((error) => setNotice(error.message));
+  useEffect(() => {
+    void load();
+  }, []);
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!image) return setNotice("Choose a sponsor image first.");
+    try {
+      setNotice("Compressing and uploading image…");
+      const compressed = await compressSponsorImage(image);
+      const form = new FormData();
+      form.append("sponsor", compressed);
+      const uploaded = await call("/uploads/sponsor", {
+        token,
+        method: "POST",
+        body: form,
+      });
+      await call("/sponsors", {
+        token,
+        method: "POST",
+        body: JSON.stringify({
+          name: name.trim() || image.name.replace(/\.[^.]+$/, ""),
+          imageUrl: uploaded.url,
+          imageFileId: uploaded.fileId,
+        }),
+      });
+      setName("");
+      setImage(null);
+      setNotice("Sponsor added to the home page.");
+      await refreshSponsors();
+      load();
+    } catch (error) {
+      setNotice(error.message);
+    }
+  };
+  const remove = async (sponsor) => {
+    requestConfirmation({
+      title: "Delete sponsor?",
+      message: `Delete sponsor “${sponsor.name}”? This cannot be undone.`,
+      confirmLabel: "Delete sponsor",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await call(`/sponsors/${sponsor._id}`, { token, method: "DELETE" });
+          setNotice("Sponsor deleted.");
+          await refreshSponsors();
+          load();
+        } catch (error) {
+          setNotice(error.message);
+        }
+      },
+    });
+  };
+  return (
+    <section className="sponsor-admin">
+      <h3>Home-page sponsors</h3>
+      <p className="event-note">
+        Images are compressed in your browser to high-quality WebP before
+        upload, reducing storage while preserving visual quality.
+      </p>
+      <form onSubmit={submit}>
+        <label>
+          Sponsor name
+          <input
+            placeholder="Example: Acme Foundation"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </label>
+        <label>
+          Sponsor logo (PNG, JPG, or WebP)
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={(event) => setImage(event.target.files?.[0] || null)}
+            required
+          />
+        </label>
+        <button>Compress and upload sponsor</button>
+        {notice && <p className="message">{notice}</p>}
+      </form>
+      <div className="sponsor-admin-list">
+        {sponsors.map((sponsor) => (
+          <article key={sponsor._id}>
+            <img src={sponsor.imageUrl} alt="" />
+            <span>{sponsor.name}</span>
+            <button className="danger" onClick={() => remove(sponsor)}>
+              Delete
+            </button>
+          </article>
+        ))}
+        {!sponsors.length && (
+          <p className="event-note">
+            No uploaded sponsors yet. The supplied default sponsor logos remain
+            visible until you upload one.
+          </p>
+        )}
+      </div>
+    </section>
+  );
 }
 function EventEditor({ event, token, onSaved, onCancel, requestConfirmation }) {
-  const [data, setData] = useState(() => ({ name: event.name || '', category: event.category || 'SPORT', fee: event.fee ?? '', format: event.format || 'SOLO', venue: event.venue || '', startsAt: dateTimeInputValue(event.startsAt), upiId: event.upiId || '', paymentInstructions: event.paymentInstructions || '', rules: event.rules || '', active: event.active !== false })); const [notice, setNotice] = useState('');
-  useEffect(() => { setData({ name: event.name || '', category: event.category || 'SPORT', fee: event.fee ?? '', format: event.format || 'SOLO', venue: event.venue || '', startsAt: dateTimeInputValue(event.startsAt), upiId: event.upiId || '', paymentInstructions: event.paymentInstructions || '', rules: event.rules || '', active: event.active !== false }); setNotice(''); }, [event]);
-  const save = async () => { try { await call(`/events/${event._id}`, { token, method: 'PATCH', body: JSON.stringify({ ...data, fee: Number(data.fee) }) }); setNotice('Event updated.'); await onSaved(); } catch (error) { setNotice(error.message); } };
-  const submit = (formEvent) => { formEvent.preventDefault(); requestConfirmation({ title: 'Save event changes?', message: `Save the changes to “${event.name}”?`, confirmLabel: 'Save changes', onConfirm: save }); };
-  return <section className="event-editor"><h3>Edit event: {event.name}</h3><form onSubmit={submit}><div className="grid"><label>Event name<input required value={data.name} onChange={(e) => setData({ ...data, name: e.target.value })} /></label><label>Category<select value={data.category} onChange={(e) => setData({ ...data, category: e.target.value })}><option value="SPORT">Sport</option><option value="MANAGEMENT">Management</option><option value="CULTURAL">Cultural</option></select></label><label>Registration fees<input required min="0" type="number" value={data.fee} onChange={(e) => setData({ ...data, fee: e.target.value })} /></label><label>Format<select value={data.format} onChange={(e) => setData({ ...data, format: e.target.value })}><option value="SOLO">Solo</option><option value="TEAM">Team</option></select></label><label>Venue<input value={data.venue} onChange={(e) => setData({ ...data, venue: e.target.value })} /></label><label>Event date & time<input required type="datetime-local" value={data.startsAt} onChange={(e) => setData({ ...data, startsAt: e.target.value })} /></label><label>UPI ID<input value={data.upiId} onChange={(e) => setData({ ...data, upiId: e.target.value })} /></label></div><label>Rules<textarea value={data.rules} onChange={(e) => setData({ ...data, rules: e.target.value })} /></label><label>Payment instructions<textarea value={data.paymentInstructions} onChange={(e) => setData({ ...data, paymentInstructions: e.target.value })} /></label><label className="toggle-label"><input type="checkbox" checked={data.active} onChange={(e) => setData({ ...data, active: e.target.checked })} /> Event is open for registration</label><div className="editor-actions"><button>Save changes</button><button type="button" className="ghost" onClick={onCancel}>Cancel</button></div>{notice && <p className="message">{notice}</p>}</form></section>;
+  const [data, setData] = useState(() => ({
+    name: event.name || "",
+    category: event.category || "SPORT",
+    fee: event.fee ?? "",
+    format: event.format || "SOLO",
+    venue: event.venue || "",
+    startsAt: dateTimeInputValue(event.startsAt),
+    upiId: event.upiId || "",
+    paymentInstructions: event.paymentInstructions || "",
+    rules: event.rules || "",
+    active: event.active !== false,
+  }));
+  const [notice, setNotice] = useState("");
+  useEffect(() => {
+    setData({
+      name: event.name || "",
+      category: event.category || "SPORT",
+      fee: event.fee ?? "",
+      format: event.format || "SOLO",
+      venue: event.venue || "",
+      startsAt: dateTimeInputValue(event.startsAt),
+      upiId: event.upiId || "",
+      paymentInstructions: event.paymentInstructions || "",
+      rules: event.rules || "",
+      active: event.active !== false,
+    });
+    setNotice("");
+  }, [event]);
+  const save = async () => {
+    try {
+      await call(`/events/${event._id}`, {
+        token,
+        method: "PATCH",
+        body: JSON.stringify({ ...data, fee: Number(data.fee) }),
+      });
+      setNotice("Event updated.");
+      await onSaved();
+    } catch (error) {
+      setNotice(error.message);
+    }
+  };
+  const submit = (formEvent) => {
+    formEvent.preventDefault();
+    requestConfirmation({
+      title: "Save event changes?",
+      message: `Save the changes to “${event.name}”?`,
+      confirmLabel: "Save changes",
+      onConfirm: save,
+    });
+  };
+  return (
+    <section className="event-editor">
+      <h3>Edit event: {event.name}</h3>
+      <form onSubmit={submit}>
+        <div className="grid">
+          <label>
+            Event name
+            <input
+              required
+              value={data.name}
+              onChange={(e) => setData({ ...data, name: e.target.value })}
+            />
+          </label>
+          <label>
+            Category
+            <select
+              value={data.category}
+              onChange={(e) => setData({ ...data, category: e.target.value })}
+            >
+              <option value="SPORT">Sport</option>
+              <option value="MANAGEMENT">Management</option>
+              <option value="CULTURAL">Cultural</option>
+            </select>
+          </label>
+          <label>
+            Registration fees
+            <input
+              required
+              min="0"
+              type="number"
+              value={data.fee}
+              onChange={(e) => setData({ ...data, fee: e.target.value })}
+            />
+          </label>
+          <label>
+            Format
+            <select
+              value={data.format}
+              onChange={(e) => setData({ ...data, format: e.target.value })}
+            >
+              <option value="SOLO">Solo</option>
+              <option value="TEAM">Team</option>
+            </select>
+          </label>
+          <label>
+            Venue
+            <input
+              value={data.venue}
+              onChange={(e) => setData({ ...data, venue: e.target.value })}
+            />
+          </label>
+          <label>
+            Event date & time
+            <input
+              required
+              type="datetime-local"
+              value={data.startsAt}
+              onChange={(e) => setData({ ...data, startsAt: e.target.value })}
+            />
+          </label>
+          <label>
+            UPI ID
+            <input
+              value={data.upiId}
+              onChange={(e) => setData({ ...data, upiId: e.target.value })}
+            />
+          </label>
+        </div>
+        <label>
+          Rules
+          <textarea
+            value={data.rules}
+            onChange={(e) => setData({ ...data, rules: e.target.value })}
+          />
+        </label>
+        <label>
+          Payment instructions
+          <textarea
+            value={data.paymentInstructions}
+            onChange={(e) =>
+              setData({ ...data, paymentInstructions: e.target.value })
+            }
+          />
+        </label>
+        <label className="toggle-label">
+          <input
+            type="checkbox"
+            checked={data.active}
+            onChange={(e) => setData({ ...data, active: e.target.checked })}
+          />{" "}
+          Event is open for registration
+        </label>
+        <div className="editor-actions">
+          <button>Save changes</button>
+          <button type="button" className="ghost" onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+        {notice && <p className="message">{notice}</p>}
+      </form>
+    </section>
+  );
 }
 function AdminManage({ session, events, refresh, refreshSponsors }) {
-  const [staff, setStaff] = useState([]); const [participants, setParticipants] = useState([]); const [notice, setNotice] = useState('');
-  const [editingEvent, setEditingEvent] = useState(null); const [confirmation, setConfirmation] = useState(null);
-  const load = () => Promise.all([call('/auth/users', { token: session.token }), call('/registrations', { token: session.token })]).then(([users, registrations]) => { setStaff(users); setParticipants(registrations); }).catch((error) => setNotice(error.message));
-  useEffect(() => { void load(); }, []);
+  const [staff, setStaff] = useState([]);
+  const [participants, setParticipants] = useState([]);
+  const [notice, setNotice] = useState("");
+  const [editingEvent, setEditingEvent] = useState(null);
+  const [confirmation, setConfirmation] = useState(null);
+  const load = () =>
+    Promise.all([
+      call("/auth/users", { token: session.token }),
+      call("/registrations", { token: session.token }),
+    ])
+      .then(([users, registrations]) => {
+        setStaff(users);
+        setParticipants(registrations);
+      })
+      .catch((error) => setNotice(error.message));
+  useEffect(() => {
+    void load();
+  }, []);
   const requestConfirmation = (details) => setConfirmation(details);
-  const remove = async (path, label) => { try { const result = await call(path, { token: session.token, method: 'DELETE' }); setNotice(result.message || 'Deleted.'); await refresh(); load(); } catch (error) { setNotice(error.message); } };
-  const requestDelete = (path, label) => requestConfirmation({ title: 'Delete item?', message: `Delete ${label}? This cannot be undone.`, confirmLabel: 'Delete', danger: true, onConfirm: () => remove(path, label) });
-  const savedEvent = async () => { await refresh(); setEditingEvent(null); setNotice('Event updated.'); };
-  return <section className="staff management-page"><p className="eyebrow">SUPER ADMIN ONLY</p><h2>Manage festival data</h2><p className="event-note">Delete participant registrations first, then their event. Your own Super Admin account cannot be deleted.</p><SponsorAdmin token={session.token} refreshSponsors={refreshSponsors} requestConfirmation={requestConfirmation} />{notice && <p className="message">{notice}</p>}<h3>Events</h3>{editingEvent && <EventEditor event={editingEvent} token={session.token} onSaved={savedEvent} onCancel={() => setEditingEvent(null)} requestConfirmation={requestConfirmation} />}<Table rows={events} cols={['name', 'category', 'format', 'fee', 'venue']} actions={(event) => <><button onClick={() => setEditingEvent(event)}>Edit event</button><button className="danger" onClick={() => requestDelete(`/events/${event._id}`, `the event “${event.name}”`)}>Delete event</button></>} /><h3>Staff accounts</h3><Table rows={staff} cols={['name', 'email', 'role']} actions={(user) => <button className="danger" disabled={user._id === session.user.id} onClick={() => requestDelete(`/auth/users/${user._id}`, `the staff account for ${user.name}`)}>Delete staff</button>} /><h3>Participants</h3><Table rows={participants} cols={['registrationId', 'leader.name', 'leader.email', 'event.name', 'payment.status', 'status']} actions={(participant) => <button className="danger" onClick={() => requestDelete(`/registrations/${participant._id}`, `registration ${participant.registrationId}`)}>Delete participant</button>} /><ActionConfirmModal confirmation={confirmation} onClose={() => setConfirmation(null)} /></section>;
+  const remove = async (path, label) => {
+    try {
+      const result = await call(path, {
+        token: session.token,
+        method: "DELETE",
+      });
+      setNotice(result.message || "Deleted.");
+      await refresh();
+      load();
+    } catch (error) {
+      setNotice(error.message);
+    }
+  };
+  const requestDelete = (path, label) =>
+    requestConfirmation({
+      title: "Delete item?",
+      message: `Delete ${label}? This cannot be undone.`,
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: () => remove(path, label),
+    });
+  const savedEvent = async () => {
+    await refresh();
+    setEditingEvent(null);
+    setNotice("Event updated.");
+  };
+  return (
+    <section className="staff management-page">
+      <p className="eyebrow">SUPER ADMIN ONLY</p>
+      <h2>Manage festival data</h2>
+      <p className="event-note">
+        Delete participant registrations first, then their event. Your own Super
+        Admin account cannot be deleted.
+      </p>
+      <SponsorAdmin
+        token={session.token}
+        refreshSponsors={refreshSponsors}
+        requestConfirmation={requestConfirmation}
+      />
+      {notice && <p className="message">{notice}</p>}
+      <h3>Events</h3>
+      {editingEvent && (
+        <EventEditor
+          event={editingEvent}
+          token={session.token}
+          onSaved={savedEvent}
+          onCancel={() => setEditingEvent(null)}
+          requestConfirmation={requestConfirmation}
+        />
+      )}
+      <Table
+        rows={events}
+        cols={["name", "category", "format", "fee", "venue"]}
+        actions={(event) => (
+          <>
+            <button onClick={() => setEditingEvent(event)}>Edit event</button>
+            <button
+              className="danger"
+              onClick={() =>
+                requestDelete(
+                  `/events/${event._id}`,
+                  `the event “${event.name}”`,
+                )
+              }
+            >
+              Delete event
+            </button>
+          </>
+        )}
+      />
+      <h3>Staff accounts</h3>
+      <Table
+        rows={staff}
+        cols={["name", "email", "role"]}
+        actions={(user) => (
+          <button
+            className="danger"
+            disabled={user._id === session.user.id}
+            onClick={() =>
+              requestDelete(
+                `/auth/users/${user._id}`,
+                `the staff account for ${user.name}`,
+              )
+            }
+          >
+            Delete staff
+          </button>
+        )}
+      />
+      <h3>Participants</h3>
+      <Table
+        rows={participants}
+        cols={[
+          "registrationId",
+          "leader.name",
+          "leader.email",
+          "event.name",
+          "payment.status",
+          "status",
+        ]}
+        actions={(participant) => (
+          <button
+            className="danger"
+            onClick={() =>
+              requestDelete(
+                `/registrations/${participant._id}`,
+                `registration ${participant.registrationId}`,
+              )
+            }
+          >
+            Delete participant
+          </button>
+        )}
+      />
+      <ActionConfirmModal
+        confirmation={confirmation}
+        onClose={() => setConfirmation(null)}
+      />
+    </section>
+  );
 }
-function Gate({ token, setNotice }) { const [value, setValue] = useState(''); const validate = async (tokenValue) => { try { const r = await call('/registrations/scan', { token, method: 'POST', body: JSON.stringify({ token: tokenValue }) }); setNotice(`${r.message}: ${r.participant}`); setValue(''); } catch (e) { setNotice(e.message); } }; useEffect(() => { const scanner = new Html5QrcodeScanner('qr-reader', { fps: 10, qrbox: 240 }, false); scanner.render((decoded) => { void scanner.clear(); void validate(decoded); }, () => {}); return () => { void scanner.clear().catch(() => {}); }; }, []); return <div className="scanner"><h2>Gate check-in</h2><div id="qr-reader"></div><p>Camera scan or paste the QR value below.</p><input placeholder="Paste QR token" value={value} onChange={(e) => setValue(e.target.value)} /><button onClick={() => validate(value)}>Validate pass</button></div>; }
-function Judge({ records, act }) { const score = (record) => { const scoreValue = prompt('Score', record.score); if (scoreValue === null) return; const penaltyValue = prompt('Penalty', record.penalty); if (penaltyValue === null) return; if (confirmAction(`Save the score for ${record.registrationId}?`)) act(`/registrations/${record._id}/score`, { score: Number(scoreValue), penalty: Number(penaltyValue) }); }; const finalize = (record) => { const rank = prompt('Rank (1, 2, 3…)', record.rank || ''); if (rank === null) return; if (confirmAction(`Finalize ${record.registrationId} with rank ${rank}? This will publish the result.`)) act(`/registrations/${record._id}/finalize`, { rank: Number(rank) }, 'POST'); }; return <div><h2>Scoring</h2><Table rows={records.filter((x) => ['CHECKED_IN', 'VERIFIED'].includes(x.status))} cols={['registrationId', 'event.name', 'leader.name', 'score', 'penalty', 'status']} actions={(x) => <><button onClick={() => score(x)}>Score</button>{x.status === 'VERIFIED' && <button onClick={() => finalize(x)}>Finalize</button>}</>} /></div>; }
-function Leaderboard({ events }) { const [eventId, setEventId] = useState(''); const [rows, setRows] = useState([]); return <div><h2>Public leaderboard</h2><select value={eventId} onChange={async (e) => { setEventId(e.target.value); setRows(e.target.value ? await call(`/registrations/leaderboard/${e.target.value}`) : []); }}><option value="">Choose event</option>{events.map((x) => <option key={x._id} value={x._id}>{x.name}</option>)}</select><Table rows={rows} cols={['rank', 'teamName', 'leader.name', 'score', 'penalty']} /></div>; }
-function Table({ rows, cols, actions }) { const get = (item, path) => path.split('.').reduce((v, key) => v?.[key], item) ?? '—'; return <div className="table-wrap"><table><thead><tr>{cols.map((x) => <th key={x}>{x.replace('.', ' ')}</th>)}{actions && <th>Actions</th>}</tr></thead><tbody>{rows.map((row) => <tr key={row._id || row.registrationId}>{cols.map((x) => <td key={x}>{get(row, x)}</td>)}{actions && <td className="actions">{actions(row)}</td>}</tr>)}{!rows.length && <tr><td colSpan={cols.length + 1}>No records.</td></tr>}</tbody></table></div>; }
+function Gate({ token, setNotice }) {
+  const [value, setValue] = useState("");
+  const validate = async (tokenValue) => {
+    try {
+      const r = await call("/registrations/scan", {
+        token,
+        method: "POST",
+        body: JSON.stringify({ token: tokenValue }),
+      });
+      setNotice(`${r.message}: ${r.participant}`);
+      setValue("");
+    } catch (e) {
+      setNotice(e.message);
+    }
+  };
+  useEffect(() => {
+    const scanner = new Html5QrcodeScanner(
+      "qr-reader",
+      { fps: 10, qrbox: 240 },
+      false,
+    );
+    scanner.render(
+      (decoded) => {
+        void scanner.clear();
+        void validate(decoded);
+      },
+      () => {},
+    );
+    return () => {
+      void scanner.clear().catch(() => {});
+    };
+  }, []);
+  return (
+    <div className="scanner">
+      <h2>Gate check-in</h2>
+      <div id="qr-reader"></div>
+      <p>Camera scan or paste the QR value below.</p>
+      <input
+        placeholder="Paste QR token"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+      />
+      <button onClick={() => validate(value)}>Validate pass</button>
+    </div>
+  );
+}
+function Judge({ records, act }) {
+  const score = (record) => {
+    const scoreValue = prompt("Score", record.score);
+    if (scoreValue === null) return;
+    const penaltyValue = prompt("Penalty", record.penalty);
+    if (penaltyValue === null) return;
+    if (confirmAction(`Save the score for ${record.registrationId}?`))
+      act(`/registrations/${record._id}/score`, {
+        score: Number(scoreValue),
+        penalty: Number(penaltyValue),
+      });
+  };
+  const finalize = (record) => {
+    const rank = prompt("Rank (1, 2, 3…)", record.rank || "");
+    if (rank === null) return;
+    if (
+      confirmAction(
+        `Finalize ${record.registrationId} with rank ${rank}? This will publish the result.`,
+      )
+    )
+      act(
+        `/registrations/${record._id}/finalize`,
+        { rank: Number(rank) },
+        "POST",
+      );
+  };
+  return (
+    <div>
+      <h2>Scoring</h2>
+      <Table
+        rows={records.filter((x) =>
+          ["CHECKED_IN", "VERIFIED"].includes(x.status),
+        )}
+        cols={[
+          "registrationId",
+          "event.name",
+          "leader.name",
+          "score",
+          "penalty",
+          "status",
+        ]}
+        actions={(x) => (
+          <>
+            <button onClick={() => score(x)}>Score</button>
+            {x.status === "VERIFIED" && (
+              <button onClick={() => finalize(x)}>Finalize</button>
+            )}
+          </>
+        )}
+      />
+    </div>
+  );
+}
+function Leaderboard({ events }) {
+  const [eventId, setEventId] = useState("");
+  const [rows, setRows] = useState([]);
+  return (
+    <div>
+      <h2>Public leaderboard</h2>
+      <select
+        value={eventId}
+        onChange={async (e) => {
+          setEventId(e.target.value);
+          setRows(
+            e.target.value
+              ? await call(`/registrations/leaderboard/${e.target.value}`)
+              : [],
+          );
+        }}
+      >
+        <option value="">Choose event</option>
+        {events.map((x) => (
+          <option key={x._id} value={x._id}>
+            {x.name}
+          </option>
+        ))}
+      </select>
+      <Table
+        rows={rows}
+        cols={["rank", "teamName", "leader.name", "score", "penalty"]}
+      />
+    </div>
+  );
+}
+function Table({ rows, cols, actions }) {
+  const get = (item, path) =>
+    path.split(".").reduce((v, key) => v?.[key], item) ?? "—";
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            {cols.map((x) => (
+              <th key={x}>{x.replace(".", " ")}</th>
+            ))}
+            {actions && <th>Actions</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row._id || row.registrationId}>
+              {cols.map((x) => (
+                <td key={x}>{get(row, x)}</td>
+              ))}
+              {actions && <td className="actions">{actions(row)}</td>}
+            </tr>
+          ))}
+          {!rows.length && (
+            <tr>
+              <td colSpan={cols.length + 1}>No records.</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
-function App() { const [events, setEvents] = useState([]); const [sponsors, setSponsors] = useState([]); const [session, setSession] = useState(() => { try { return JSON.parse(localStorage.getItem('aarohan-session') || 'null'); } catch { localStorage.removeItem('aarohan-session'); return null; } }); const [page, setPage] = useState(() => location.hash.slice(1) || 'home'); const refresh = () => call('/events').then(setEvents).catch(() => {}); const refreshSponsors = () => call('/sponsors').then(setSponsors).catch(() => {}); useEffect(() => { void refresh(); void refreshSponsors(); }, []); useEffect(() => { const syncPage = () => { setPage(location.hash.slice(1) || 'home'); if (location.hash === '#login') setSession(null); }; window.addEventListener('hashchange', syncPage); return () => window.removeEventListener('hashchange', syncPage); }, []); const go = (target) => { setPage(target); location.hash = target; window.scrollTo(0, 0); }; const login = (s) => { localStorage.setItem('aarohan-session', JSON.stringify(s)); setSession(s); go('staff'); }; const publicNavigation = !session || session.user.role === 'SUPER_ADMIN'; const isRegistrationPage = page === 'register' || page.startsWith('register/'); const lockedEventId = page.startsWith('register/') ? page.split('/')[1] : ''; return <main><nav><div className="brand"><img src="/college-logo.jpg" alt="Fr. C. Rodrigues Institute of Management Studies emblem" /><strong className="aarohan-wordmark">ABSTRACT AAROHAN</strong></div><div>{publicNavigation && <><button onClick={() => go('home')}>Home</button><button onClick={() => go('events')}>Events</button><button onClick={() => go('register')}>Register</button><button onClick={() => go('pass')}>My pass</button></>}{session?.user.role === 'SUPER_ADMIN' && <button onClick={() => go('manage')}>Manage</button>}<button onClick={() => go(session ? 'staff' : 'login')}>{session ? session.user.role : 'Staff sign in'}</button>{session && <button onClick={() => { localStorage.removeItem('aarohan-session'); setSession(null); go('home'); }}>Sign out</button>}</div></nav>{page === 'home' && <Home events={events} sponsors={sponsors} go={go} />}{page === 'events' && <EventExplorer events={events} go={go} />}{isRegistrationPage && <><section className="hero"><p className="eyebrow">REGISTER · COMPETE · WIN</p><h1>Your stage is waiting.</h1><p>Register now. Your QR entry pass follows finance approval.</p></section><PublicRegistration events={events} refresh={refresh} lockedEventId={lockedEventId} /></>}{page === 'pass' && <PassLookup />}{page === 'login' && <Login onLogin={login} />}{page === 'staff' && session && <Staff session={session} events={events} refresh={refresh} />}{page === 'manage' && session?.user.role === 'SUPER_ADMIN' && <AdminManage session={session} events={events} refresh={refresh} refreshSponsors={refreshSponsors} />}{page === 'staff' && !session && <Login onLogin={login} />}</main>; }
-class AppErrorBoundary extends React.Component { constructor(props) { super(props); this.state = { error: false }; } static getDerivedStateFromError() { return { error: true }; } componentDidCatch(error) { console.error('Aarohan UI error:', error); if (!sessionStorage.getItem('aarohan-auto-reloaded')) { sessionStorage.setItem('aarohan-auto-reloaded', 'true'); window.location.reload(); } } render() { return this.state.error ? <main className="recovery"><h1>Unable to load this view</h1><p>Please try again.</p><button onClick={() => { sessionStorage.removeItem('aarohan-auto-reloaded'); window.location.reload(); }}>Try again</button></main> : this.props.children; } }
-createRoot(document.getElementById('root')).render(<AppErrorBoundary><App /></AppErrorBoundary>);
+function App() {
+  const [events, setEvents] = useState([]);
+  const [sponsors, setSponsors] = useState([]);
+  const [session, setSession] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("aarohan-session") || "null");
+    } catch {
+      localStorage.removeItem("aarohan-session");
+      return null;
+    }
+  });
+  const [page, setPage] = useState(() => location.hash.slice(1) || "home");
+  const refresh = () =>
+    call("/events")
+      .then(setEvents)
+      .catch(() => {});
+  const refreshSponsors = () =>
+    call("/sponsors")
+      .then(setSponsors)
+      .catch(() => {});
+  useEffect(() => {
+    void refresh();
+    void refreshSponsors();
+  }, []);
+  useEffect(() => {
+    const syncPage = () => {
+      setPage(location.hash.slice(1) || "home");
+      if (location.hash === "#login") setSession(null);
+    };
+    window.addEventListener("hashchange", syncPage);
+    return () => window.removeEventListener("hashchange", syncPage);
+  }, []);
+  const go = (target) => {
+    setPage(target);
+    location.hash = target;
+    window.scrollTo(0, 0);
+  };
+  const login = (s) => {
+    localStorage.setItem("aarohan-session", JSON.stringify(s));
+    setSession(s);
+    go("staff");
+  };
+  const publicNavigation = !session || session.user.role === "SUPER_ADMIN";
+  const isRegistrationPage =
+    page === "register" || page.startsWith("register/");
+  const lockedEventId = page.startsWith("register/") ? page.split("/")[1] : "";
+  return (
+    <main>
+      <nav>
+        <div className="brand">
+          <img
+            src="/college-logo.jpg"
+            alt="Fr. C. Rodrigues Institute of Management Studies emblem"
+          />
+          <strong className="aarohan-wordmark">ABSTRACT AAROHAN</strong>
+        </div>
+        <div>
+          {publicNavigation && (
+            <>
+              <button onClick={() => go("home")}>Home</button>
+              <button onClick={() => go("events")}>Events</button>
+              <button onClick={() => go("register")}>Register</button>
+              <button onClick={() => go("pass")}>My pass</button>
+            </>
+          )}
+          {session?.user.role === "SUPER_ADMIN" && (
+            <button onClick={() => go("manage")}>Manage</button>
+          )}
+          <button onClick={() => go(session ? "staff" : "login")}>
+            {session ? session.user.role : "Staff sign in"}
+          </button>
+          {session && (
+            <button
+              onClick={() => {
+                localStorage.removeItem("aarohan-session");
+                setSession(null);
+                go("home");
+              }}
+            >
+              Sign out
+            </button>
+          )}
+        </div>
+      </nav>
+      {page === "home" && <Home events={events} sponsors={sponsors} go={go} />}
+      {page === "events" && <EventExplorer events={events} go={go} />}
+      {isRegistrationPage && (
+        <>
+          <section className="hero">
+            <p className="eyebrow">REGISTER · COMPETE · WIN</p>
+            <h1>Your stage is waiting.</h1>
+            <p>Register now. Your QR entry pass follows finance approval.</p>
+          </section>
+          <PublicRegistration
+            events={events}
+            refresh={refresh}
+            lockedEventId={lockedEventId}
+          />
+        </>
+      )}
+      {page === "pass" && <PassLookup />}
+      {page === "login" && <Login onLogin={login} />}
+      {page === "staff" && session && (
+        <Staff session={session} events={events} refresh={refresh} />
+      )}
+      {page === "manage" && session?.user.role === "SUPER_ADMIN" && (
+        <AdminManage
+          session={session}
+          events={events}
+          refresh={refresh}
+          refreshSponsors={refreshSponsors}
+        />
+      )}
+      {page === "staff" && !session && <Login onLogin={login} />}
+    </main>
+  );
+}
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: false };
+  }
+  static getDerivedStateFromError() {
+    return { error: true };
+  }
+  componentDidCatch(error) {
+    console.error("Aarohan UI error:", error);
+    if (!sessionStorage.getItem("aarohan-auto-reloaded")) {
+      sessionStorage.setItem("aarohan-auto-reloaded", "true");
+      window.location.reload();
+    }
+  }
+  render() {
+    return this.state.error ? (
+      <main className="recovery">
+        <h1>Unable to load this view</h1>
+        <p>Please try again.</p>
+        <button
+          onClick={() => {
+            sessionStorage.removeItem("aarohan-auto-reloaded");
+            window.location.reload();
+          }}
+        >
+          Try again
+        </button>
+      </main>
+    ) : (
+      this.props.children
+    );
+  }
+}
+createRoot(document.getElementById("root")).render(
+  <AppErrorBoundary>
+    <App />
+  </AppErrorBoundary>,
+);
