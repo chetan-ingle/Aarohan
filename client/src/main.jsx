@@ -1969,7 +1969,10 @@ function App() {
   });
   const [page, setPage] = useState(() => location.hash.slice(1) || "home");
   const refresh = () =>
-    call("/events")
+    // The timestamp makes this a distinct URL as well as using `no-store` in
+    // `call`. It prevents a CDN configured outside this repository from
+    // returning a previous event list after an admin changes its date/time.
+    call(`/events?fresh=${Date.now()}`)
       .then(setEvents)
       .catch(() => {});
   const updateEvent = (updatedEvent) => {
