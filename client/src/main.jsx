@@ -1642,7 +1642,13 @@ function EventEditor({ event, token, onSaved, onCancel, requestConfirmation }) {
     </section>
   );
 }
-function AdminManage({ session, events, refresh, refreshSponsors }) {
+function AdminManage({
+  session,
+  events,
+  refresh,
+  refreshSponsors,
+  onEventUpdated,
+}) {
   const [staff, setStaff] = useState([]);
   const [participants, setParticipants] = useState([]);
   const [notice, setNotice] = useState("");
@@ -1683,7 +1689,10 @@ function AdminManage({ session, events, refresh, refreshSponsors }) {
       danger: true,
       onConfirm: () => remove(path, label),
     });
-  const savedEvent = async () => {
+  const savedEvent = async (updatedEvent) => {
+    // Update the currently running app immediately. This prevents the public
+    // cards from retaining the pre-edit event object while the list reloads.
+    onEventUpdated(updatedEvent);
     await refresh();
     setEditingEvent(null);
     setNotice("Event updated.");
@@ -1963,6 +1972,14 @@ function App() {
     call("/events")
       .then(setEvents)
       .catch(() => {});
+  const updateEvent = (updatedEvent) => {
+    if (!updatedEvent?._id) return;
+    setEvents((current) =>
+      current.map((event) =>
+        event._id === updatedEvent._id ? updatedEvent : event,
+      ),
+    );
+  };
   const refreshSponsors = () =>
     call("/sponsors")
       .then(setSponsors)
@@ -1982,6 +1999,16 @@ function App() {
   const go = (target) => {
     setPage(target);
     location.hash = target;
+    if (
+      target === "home" ||
+      target === "events" ||
+      target === "register" ||
+      target.startsWith("register/")
+    ) {
+      // Fetch a fresh public event list on each visit as well as replacing the
+      // saved event above. This also covers edits made in another browser tab.
+      void refresh();
+    }
     window.scrollTo(0, 0);
   };
   const login = (s) => {
@@ -2058,6 +2085,7 @@ function App() {
           events={events}
           refresh={refresh}
           refreshSponsors={refreshSponsors}
+          onEventUpdated={updateEvent}
         />
       )}
       {page === "staff" && !session && <Login onLogin={login} />}
