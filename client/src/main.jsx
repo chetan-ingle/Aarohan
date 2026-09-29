@@ -13,18 +13,23 @@ const money = new Intl.NumberFormat("en-IN", {
   currency: "INR",
   maximumFractionDigits: 0,
 });
-const eventDateTime = (value) =>
-  value
-    ? new Intl.DateTimeFormat("en-IN", {
-        dateStyle: "medium",
-        timeStyle: "short",
-      }).format(new Date(value))
-    : "";
+const eventDateTime = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+};
 const dateTimeInputValue = (value) => {
   if (!value) return "";
   const date = new Date(value);
-  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
-  return date.toISOString().slice(0, 16);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate(),
+  )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 };
 const confirmAction = (message) => window.confirm(message);
 function ActionConfirmModal({ confirmation, onClose }) {
@@ -800,10 +805,11 @@ function EventAdmin({ token, events, refresh, setNotice }) {
           required: true,
         }));
       const payload = Object.fromEntries(
-        Object.entries(data).map(([key, value]) => [
-          key,
-          key === "fee" && value !== "" ? Number(value) : value,
-        ]),
+        Object.entries(data).map(([key, value]) => {
+          if (key === "fee" && value !== "") return [key, Number(value)];
+          if (key === "startsAt" && value) return [key, new Date(value).toISOString()];
+          return [key, value];
+        }),
       );
       await call("/events", {
         token,
@@ -1519,10 +1525,15 @@ function EventEditor({ event, token, onSaved, onCancel, requestConfirmation }) {
   }, [event]);
   const save = async () => {
     try {
+      const payload = {
+        ...data,
+        fee: Number(data.fee),
+        startsAt: data.startsAt ? new Date(data.startsAt).toISOString() : "",
+      };
       const updatedEvent = await call(`/events/${event._id}`, {
         token,
         method: "PATCH",
-        body: JSON.stringify({ ...data, fee: Number(data.fee) }),
+        body: JSON.stringify(payload),
       });
       setNotice("Event updated.");
       await onSaved(updatedEvent);

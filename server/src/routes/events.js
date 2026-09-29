@@ -12,12 +12,16 @@ router.get('/', asyncHandler(async (_req, res) => {
   res.json(await Event.find({ active: true }).sort('name'));
 }));
 router.post('/', protect, authorize('SUPER_ADMIN'), asyncHandler(async (req, res) => {
-  const event = await Event.create(req.body);
+  const payload = { ...req.body };
+  if (payload.startsAt) payload.startsAt = new Date(payload.startsAt);
+  const event = await Event.create(payload);
   await User.updateMany({ role: { $ne: 'SUPER_ADMIN' } }, { $addToSet: { assignedEvents: event._id } });
   res.status(201).json(event);
 }));
 router.patch('/:id', protect, authorize('SUPER_ADMIN'), asyncHandler(async (req, res) => {
-  const event = await Event.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+  const payload = { ...req.body };
+  if (payload.startsAt !== undefined) payload.startsAt = payload.startsAt ? new Date(payload.startsAt) : null;
+  const event = await Event.findByIdAndUpdate(req.params.id, payload, { new: true, runValidators: true });
   if (!event) return res.status(404).json({ message: 'Event not found' });
   res.json(event);
 }));
