@@ -63,6 +63,7 @@ function ActionConfirmModal({ confirmation, onClose }) {
 const call = async (path, { token, ...options } = {}) => {
   const r = await fetch(`${API}${path}`, {
     ...options,
+    cache: options.cache ?? (options.method ? undefined : "no-store"),
     headers: {
       ...(options.body instanceof FormData
         ? {}
@@ -226,6 +227,12 @@ function PublicRegistration({ events, refresh, lockedEventId = "" }) {
                   <b>Venue:</b> {event.venue}
                 </p>
               )}
+              <p>
+                <b>Date & time:</b>{" "}
+                {event.startsAt
+                  ? eventDateTime(event.startsAt)
+                  : "To be announced"}
+              </p>
             </div>
           )}
           <div className="grid">
@@ -1512,13 +1519,13 @@ function EventEditor({ event, token, onSaved, onCancel, requestConfirmation }) {
   }, [event]);
   const save = async () => {
     try {
-      await call(`/events/${event._id}`, {
+      const updatedEvent = await call(`/events/${event._id}`, {
         token,
         method: "PATCH",
         body: JSON.stringify({ ...data, fee: Number(data.fee) }),
       });
       setNotice("Event updated.");
-      await onSaved();
+      await onSaved(updatedEvent);
     } catch (error) {
       setNotice(error.message);
     }
