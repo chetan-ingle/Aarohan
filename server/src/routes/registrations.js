@@ -60,8 +60,8 @@ router.get('/export/category/:category', protect, authorize('SUPER_ADMIN', 'CCT'
 router.get('/export/categories-workbook', protect, authorize('SUPER_ADMIN', 'CCT'), asyncHandler(async (req, res) => {
   const categories = [['SPORT', 'Sports'], ['MANAGEMENT', 'Management'], ['CULTURAL', 'Cultural']];
   const rows = await Registration.find({ ...scoped(req) }).populate('event', 'name category').sort('event.name registrationId');
-  const headers = ['Registration ID', 'Participant / Team', 'Participant email', 'Contact', 'Event', 'Team members', 'Received amount', 'Payment status', 'QR pass status', 'Check-in status'];
-  const workbook = createCategoryWorkbook(categories.map(([category, name]) => ({ name, rows: [headers, ...rows.filter((item) => item.event?.category === category).map((item) => [item.registrationId, item.teamName || item.leader.name, item.leader.email, item.leader.phone, item.event?.name, item.members.map((member) => `${member.name}${member.phone ? ` (${member.phone})` : ''}`).join('; '), item.payment.amount, item.payment.status, item.passActive ? 'ACTIVE' : 'NOT ISSUED', item.status === 'CHECKED_IN' ? 'CHECKED IN' : 'NOT CHECKED IN'])] })));
+  const headers = ['Registration ID', 'Participant / Team', 'College', 'Participant email', 'Contact', 'Event', 'Team members', 'Received amount', 'Payment status', 'QR pass status', 'Check-in status'];
+  const workbook = createCategoryWorkbook(categories.map(([category, name]) => ({ name, rows: [headers, ...rows.filter((item) => item.event?.category === category).map((item) => [item.registrationId, item.teamName || item.leader.name, item.college, item.leader.email, item.leader.phone, item.event?.name, item.members.map((member) => `${member.name}${member.phone ? ` (${member.phone})` : ''}`).join('; '), item.payment.amount, item.payment.status, item.passActive ? 'ACTIVE' : 'NOT ISSUED', item.status === 'CHECKED_IN' ? 'CHECKED IN' : 'NOT CHECKED IN'])] })));
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename="abstract-aarohan-category-rosters.xlsx"');
   res.send(workbook);
