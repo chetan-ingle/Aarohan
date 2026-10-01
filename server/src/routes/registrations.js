@@ -46,7 +46,7 @@ router.get('/', protect, authorize('SUPER_ADMIN', 'FINANCE', 'CCT', 'JUDGE'), as
 
 router.get('/export/finance', protect, authorize('FINANCE', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const rows = await Registration.find({ ...scoped(req) }).populate('event', 'name');
-  sendCsv(res, 'finance-audit.csv', [{ label: 'Registration ID', value: (x) => x.registrationId }, { label: 'Event', value: (x) => x.event?.name }, { label: 'Participant', value: (x) => x.leader.name }, { label: 'Amount', value: (x) => x.payment.amount }, { label: 'UTR', value: (x) => x.payment.utr }, { label: 'Status', value: (x) => x.payment.status }, { label: 'Reviewed At', value: (x) => x.payment.reviewedAt?.toISOString() }], rows);
+  sendCsv(res, 'finance-audit.csv', [{ label: 'Registration ID', value: (x) => x.registrationId }, { label: 'Event', value: (x) => x.event?.name }, { label: 'Participant', value: (x) => x.leader.name }, { label: 'College', value: (x) => x.college }, { label: 'Amount', value: (x) => x.payment.amount }, { label: 'UTR', value: (x) => x.payment.utr }, { label: 'Status', value: (x) => x.payment.status }, { label: 'Reviewed At', value: (x) => x.payment.reviewedAt?.toISOString() }], rows);
 }));
 
 router.get('/export/category/:category', protect, authorize('SUPER_ADMIN', 'CCT', 'JUDGE'), asyncHandler(async (req, res) => {
@@ -54,7 +54,7 @@ router.get('/export/category/:category', protect, authorize('SUPER_ADMIN', 'CCT'
   if (!['SPORT', 'MANAGEMENT', 'CULTURAL'].includes(category)) return res.status(400).json({ message: 'Invalid event category' });
   const events = await Event.find({ category }).select('_id');
   const rows = await Registration.find({ event: { $in: events.map((event) => event._id) } }).populate('event', 'name category');
-  sendCsv(res, `${category.toLowerCase()}-category-roster.csv`, [{ label: 'Category', value: (x) => x.event?.category }, { label: 'Event', value: (x) => x.event?.name }, { label: 'Registration ID', value: (x) => x.registrationId }, { label: 'Participant', value: (x) => x.leader.name }, { label: 'Email', value: (x) => x.leader.email }, { label: 'Phone', value: (x) => x.leader.phone }, { label: 'Team', value: (x) => x.teamName }, { label: 'Members', value: (x) => x.members.map((m) => m.name).join('; ') }, { label: 'Received amount', value: (x) => x.payment.amount }, { label: 'Payment status', value: (x) => x.payment.status }, { label: 'Registration status', value: (x) => x.status }], rows);
+  sendCsv(res, `${category.toLowerCase()}-category-roster.csv`, [{ label: 'Category', value: (x) => x.event?.category }, { label: 'Event', value: (x) => x.event?.name }, { label: 'Registration ID', value: (x) => x.registrationId }, { label: 'Participant', value: (x) => x.leader.name }, { label: 'College', value: (x) => x.college }, { label: 'Email', value: (x) => x.leader.email }, { label: 'Phone', value: (x) => x.leader.phone }, { label: 'Team', value: (x) => x.teamName }, { label: 'Members', value: (x) => x.members.map((m) => m.name).join('; ') }, { label: 'Received amount', value: (x) => x.payment.amount }, { label: 'Payment status', value: (x) => x.payment.status }, { label: 'Registration status', value: (x) => x.status }], rows);
 }));
 
 router.get('/export/categories-workbook', protect, authorize('SUPER_ADMIN', 'CCT'), asyncHandler(async (req, res) => {
@@ -69,7 +69,7 @@ router.get('/export/categories-workbook', protect, authorize('SUPER_ADMIN', 'CCT
 
 router.get('/export/event/:eventId', protect, authorize('SUPER_ADMIN', 'CCT', 'JUDGE'), asyncHandler(async (req, res) => {
   const rows = await Registration.find({ event: req.params.eventId });
-  sendCsv(res, 'event-roster.csv', [{ label: 'Registration ID', value: (x) => x.registrationId }, { label: 'Participant', value: (x) => x.leader.name }, { label: 'Email', value: (x) => x.leader.email }, { label: 'Phone', value: (x) => x.leader.phone }, { label: 'Team', value: (x) => x.teamName }, { label: 'Members', value: (x) => x.members.map((m) => m.name).join('; ') }, { label: 'Received amount', value: (x) => x.payment.amount }, { label: 'Payment status', value: (x) => x.payment.status }, { label: 'Status', value: (x) => x.status }, { label: 'Score', value: (x) => x.score }, { label: 'Rank', value: (x) => x.rank }], rows);
+  sendCsv(res, 'event-roster.csv', [{ label: 'Registration ID', value: (x) => x.registrationId }, { label: 'Participant', value: (x) => x.leader.name }, { label: 'College', value: (x) => x.college }, { label: 'Email', value: (x) => x.leader.email }, { label: 'Phone', value: (x) => x.leader.phone }, { label: 'Team', value: (x) => x.teamName }, { label: 'Members', value: (x) => x.members.map((m) => m.name).join('; ') }, { label: 'Received amount', value: (x) => x.payment.amount }, { label: 'Payment status', value: (x) => x.payment.status }, { label: 'Status', value: (x) => x.status }, { label: 'Score', value: (x) => x.score }, { label: 'Rank', value: (x) => x.rank }], rows);
 }));
 
 router.delete('/:id', protect, authorize('SUPER_ADMIN'), asyncHandler(async (req, res) => {
