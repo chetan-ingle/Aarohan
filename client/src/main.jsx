@@ -697,7 +697,14 @@ function Staff({ session, events, refresh }) {
           />
         </>
       )}
-      {tab === "finance" && <Finance records={records} act={act} />}
+      {tab === "finance" && (
+        <Finance
+          records={records}
+          act={act}
+          token={session.token}
+          canManagePaymentMethods={session.user.role === "FINANCE"}
+        />
+      )}
       {tab === "cct" && (
         <Roster records={records} events={events} token={session.token} />
       )}
@@ -962,7 +969,21 @@ function PaymentProof({ url }) {
     <span className="no-proof">No screenshot</span>
   );
 }
-function Finance({ records, act }) {
+function Finance({ records, act, token, canManagePaymentMethods }) {
+  const [paymentMethods, setPaymentMethods] = useState([]);
+  const [confirmation, setConfirmation] = useState(null);
+  const loadPaymentMethods = async () => {
+    try {
+      setPaymentMethods(await call("/payment-methods", { token }));
+    } catch {
+      // The finance dashboard remains available if payment methods have not
+      // been configured yet or the backend is temporarily unavailable.
+      setPaymentMethods([]);
+    }
+  };
+  useEffect(() => {
+    if (canManagePaymentMethods) void loadPaymentMethods();
+  }, [token, canManagePaymentMethods]);
   const approved = records.filter(
     (record) => record.payment?.status === "APPROVED",
   );
@@ -1076,6 +1097,20 @@ function Finance({ records, act }) {
         rows={eventRevenue}
         cols={["event", "approvedRegistrations", "revenue"]}
       />
+      {canManagePaymentMethods && (
+        <>
+          <PaymentMethodAdmin
+            token={token}
+            paymentMethods={paymentMethods}
+            refreshPaymentMethods={loadPaymentMethods}
+            requestConfirmation={setConfirmation}
+          />
+          <ActionConfirmModal
+            confirmation={confirmation}
+            onClose={() => setConfirmation(null)}
+          />
+        </>
+      )}
     </div>
   );
 }
@@ -1547,12 +1582,30 @@ function PaymentMethodAdmin({ token, paymentMethods, refreshPaymentMethods, requ
     },
   });
 
+  const makeDefault = (method) => requestConfirmation({
+    title: "Use this QR for registrations?",
+    message: `Use “${method.label}” and its UPI ID on every event registration page?`,
+    confirmLabel: "Use this QR",
+    onConfirm: async () => {
+      try {
+        const result = await call(`/payment-methods/${method._id}/default`, {
+          token,
+          method: "PATCH",
+        });
+        setNotice(`“${result.label}” is now used on registration pages for ${result.updatedEvents} event(s).`);
+        await refreshPaymentMethods();
+      } catch (error) {
+        setNotice(error.message);
+      }
+    },
+  });
+
   return (
     <section className="payment-method-admin">
       <h3>Payment QR & UPI accounts</h3>
       <p className="event-note">
-        Add each receiving QR once here. When editing an event below, choose the
-        saved QR and UPI account that participants should use.
+        Add each receiving QR once here. Select “Use this QR” to make it the QR
+        and UPI ID shown to participants on every registration page.
       </p>
       <form onSubmit={addPaymentMethod}>
         <div className="grid">
@@ -1593,8 +1646,12 @@ function PaymentMethodAdmin({ token, paymentMethods, refreshPaymentMethods, requ
             <img src={method.qrUrl} alt={`${method.label} UPI QR`} />
             <div>
               <b>{method.label}</b>
+              {method.isDefault && <strong className="primary-payment">Currently used on registration pages</strong>}
               <span>UPI ID: {method.upiId}</span>
             </div>
+            {!method.isDefault && (
+              <button onClick={() => makeDefault(method)}>Use this QR</button>
+            )}
             <button className="danger" onClick={() => removePaymentMethod(method)}>
               Delete QR
             </button>
@@ -1845,12 +1902,6 @@ function AdminManage({
       <SponsorAdmin
         token={session.token}
         refreshSponsors={refreshSponsors}
-        requestConfirmation={requestConfirmation}
-      />
-      <PaymentMethodAdmin
-        token={session.token}
-        paymentMethods={paymentMethods}
-        refreshPaymentMethods={refreshPaymentMethods}
         requestConfirmation={requestConfirmation}
       />
       {notice && <p className="message">{notice}</p>}

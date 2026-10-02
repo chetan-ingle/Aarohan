@@ -6,6 +6,7 @@ const paymentMethodSchema = new mongoose.Schema({
   qrUrl: { type: String, required: true },
   qrFileId: String,
   active: { type: Boolean, default: true },
+  isDefault: { type: Boolean, default: false },
 }, { timestamps: true });
 
 export default mongoose.model('PaymentMethod', paymentMethodSchema);

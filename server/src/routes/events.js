@@ -7,8 +7,21 @@ import { protect, authorize } from '../middleware/auth.js';
 import asyncHandler from '../middleware/asyncHandler.js';
 const router = express.Router();
 
-const applyPaymentMethod = async (payload) => {
-  if (!Object.prototype.hasOwnProperty.call(payload, 'paymentMethodId')) return payload;
+const assignPaymentMethod = (payload, paymentMethod) => {
+  payload.paymentMethod = paymentMethod._id;
+  // Store a snapshot on the event so participants can always see the correct
+  // payment details even if the payment-account list changes later.
+  payload.upiId = paymentMethod.upiId;
+  payload.upiQrUrl = paymentMethod.qrUrl;
+};
+
+const applyPaymentMethod = async (payload, useDefault = false) => {
+  if (!Object.prototype.hasOwnProperty.call(payload, 'paymentMethodId')) {
+    if (!useDefault) return payload;
+    const defaultMethod = await PaymentMethod.findOne({ active: true }).sort({ isDefault: -1, createdAt: -1 });
+    if (defaultMethod) assignPaymentMethod(payload, defaultMethod);
+    return payload;
+  }
   const paymentMethodId = payload.paymentMethodId;
   delete payload.paymentMethodId;
   if (!paymentMethodId) return payload;
@@ -19,11 +32,7 @@ const applyPaymentMethod = async (payload) => {
     error.status = 400;
     throw error;
   }
-  payload.paymentMethod = paymentMethod._id;
-  // Store a snapshot on the event so participants can always see the correct
-  // payment details even if the payment-account list changes later.
-  payload.upiId = paymentMethod.upiId;
-  payload.upiQrUrl = paymentMethod.qrUrl;
+  assignPaymentMethod(payload, paymentMethod);
   return payload;
 };
 
@@ -35,7 +44,7 @@ router.get('/', asyncHandler(async (_req, res) => {
 router.post('/', protect, authorize('SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const payload = { ...req.body };
   if (payload.startsAt) payload.startsAt = new Date(payload.startsAt);
-  await applyPaymentMethod(payload);
+  await applyPaymentMethod(payload, true);
   const event = await Event.create(payload);
   await User.updateMany({ role: { $ne: 'SUPER_ADMIN' } }, { $addToSet: { assignedEvents: event._id } });
   res.status(201).json(event);

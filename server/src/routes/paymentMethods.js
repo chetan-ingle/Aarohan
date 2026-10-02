@@ -7,21 +7,37 @@ import asyncHandler from '../middleware/asyncHandler.js';
 
 const router = express.Router();
 
-router.use(protect, authorize('SUPER_ADMIN'));
-
-router.get('/', asyncHandler(async (_req, res) => {
-  res.json(await PaymentMethod.find().sort('-createdAt'));
+router.get('/', protect, authorize('SUPER_ADMIN', 'FINANCE'), asyncHandler(async (_req, res) => {
+  res.json(await PaymentMethod.find().sort({ isDefault: -1, createdAt: -1 }));
 }));
 
-router.post('/', asyncHandler(async (req, res) => {
+router.post('/', protect, authorize('FINANCE'), asyncHandler(async (req, res) => {
   const { label, upiId, qrUrl, qrFileId } = req.body;
   if (!label?.trim() || !upiId?.trim() || !qrUrl) {
     return res.status(400).json({ message: 'Payment account name, UPI ID, and QR image are required.' });
   }
-  res.status(201).json(await PaymentMethod.create({ label, upiId, qrUrl, qrFileId }));
+  const hasDefault = await PaymentMethod.exists({ isDefault: true });
+  res.status(201).json(await PaymentMethod.create({ label, upiId, qrUrl, qrFileId, isDefault: !hasDefault }));
 }));
 
-router.delete('/:id', asyncHandler(async (req, res) => {
+router.patch('/:id/default', protect, authorize('FINANCE'), asyncHandler(async (req, res) => {
+  const paymentMethod = await PaymentMethod.findById(req.params.id);
+  if (!paymentMethod) return res.status(404).json({ message: 'Payment QR not found.' });
+  await PaymentMethod.updateMany({ _id: { $ne: paymentMethod._id } }, { $set: { isDefault: false } });
+  paymentMethod.isDefault = true;
+  await paymentMethod.save();
+  // Finance selects the currently used receiving account. Update every event
+  // so its public registration form immediately displays this QR and UPI ID.
+  const update = {
+    paymentMethod: paymentMethod._id,
+    upiId: paymentMethod.upiId,
+    upiQrUrl: paymentMethod.qrUrl,
+  };
+  const result = await Event.updateMany({}, { $set: update });
+  res.json({ ...paymentMethod.toObject(), updatedEvents: result.modifiedCount });
+}));
+
+router.delete('/:id', protect, authorize('FINANCE'), asyncHandler(async (req, res) => {
   const paymentMethod = await PaymentMethod.findById(req.params.id);
   if (!paymentMethod) return res.status(404).json({ message: 'Payment QR not found.' });
 
