@@ -750,12 +750,10 @@ function EventAdmin({ token, events, refresh, setNotice }) {
     rules: "",
     venue: "",
     startsAt: "",
-    upiId: "",
     paymentInstructions: "",
     formFields: [],
   });
   const [fields, setFields] = useState("");
-  const [qr, setQr] = useState(null);
   const input = (key, type = "text") =>
     key === "category" ? (
       <label>
@@ -795,14 +793,6 @@ function EventAdmin({ token, events, refresh, setNotice }) {
   const submit = async (e) => {
     e.preventDefault();
     try {
-      let upiQrUrl = "";
-      if (qr) {
-        const fd = new FormData();
-        fd.append("qr", qr);
-        upiQrUrl = (
-          await call("/uploads/upi-qr", { token, method: "POST", body: fd })
-        ).url;
-      }
       const formFields = fields
         .split(",")
         .map((label) => label.trim())
@@ -823,7 +813,7 @@ function EventAdmin({ token, events, refresh, setNotice }) {
       await call("/events", {
         token,
         method: "POST",
-        body: JSON.stringify({ ...payload, upiQrUrl, formFields }),
+        body: JSON.stringify({ ...payload, formFields }),
       });
       setNotice("Event and registration form created.");
       refresh();
@@ -842,7 +832,6 @@ function EventAdmin({ token, events, refresh, setNotice }) {
           {input("format")}
           {input("venue")}
           {input("startsAt", "datetime-local")}
-          {input("upiId")}
         </div>
         <label>
           Rules
@@ -859,14 +848,6 @@ function EventAdmin({ token, events, refresh, setNotice }) {
             onChange={(e) =>
               setData({ ...data, paymentInstructions: e.target.value })
             }
-          />
-        </label>
-        <label>
-          UPI QR image
-          <input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            onChange={(e) => setQr(e.target.files[0])}
           />
         </label>
         <label>
@@ -1503,7 +1484,129 @@ function SponsorAdmin({ token, refreshSponsors, requestConfirmation }) {
     </section>
   );
 }
-function EventEditor({ event, token, onSaved, onCancel, requestConfirmation }) {
+function PaymentMethodAdmin({ token, paymentMethods, refreshPaymentMethods, requestConfirmation }) {
+  const [label, setLabel] = useState("");
+  const [upiId, setUpiId] = useState("");
+  const [qr, setQr] = useState(null);
+  const [notice, setNotice] = useState("");
+
+  const addPaymentMethod = async (formEvent) => {
+    formEvent.preventDefault();
+    if (!qr) {
+      setNotice("Choose a QR image to upload.");
+      return;
+    }
+    if (qr.size > 2 * 1024 * 1024) {
+      setNotice("QR image must be 2 MB or smaller.");
+      return;
+    }
+    try {
+      const uploadData = new FormData();
+      uploadData.append("qr", qr);
+      const uploaded = await call("/uploads/upi-qr", {
+        token,
+        method: "POST",
+        body: uploadData,
+      });
+      await call("/payment-methods", {
+        token,
+        method: "POST",
+        body: JSON.stringify({
+          label: label.trim(),
+          upiId: upiId.trim(),
+          qrUrl: uploaded.url,
+          qrFileId: uploaded.fileId,
+        }),
+      });
+      setLabel("");
+      setUpiId("");
+      setQr(null);
+      setNotice("Payment QR and UPI account added.");
+      await refreshPaymentMethods();
+    } catch (error) {
+      setNotice(error.message);
+    }
+  };
+
+  const removePaymentMethod = (method) => requestConfirmation({
+    title: "Delete payment QR?",
+    message: `Delete “${method.label}”? It can no longer be assigned to events.`,
+    confirmLabel: "Delete QR",
+    danger: true,
+    onConfirm: async () => {
+      try {
+        const result = await call(`/payment-methods/${method._id}`, {
+          token,
+          method: "DELETE",
+        });
+        setNotice(result.message);
+        await refreshPaymentMethods();
+      } catch (error) {
+        setNotice(error.message);
+      }
+    },
+  });
+
+  return (
+    <section className="payment-method-admin">
+      <h3>Payment QR & UPI accounts</h3>
+      <p className="event-note">
+        Add each receiving QR once here. When editing an event below, choose the
+        saved QR and UPI account that participants should use.
+      </p>
+      <form onSubmit={addPaymentMethod}>
+        <div className="grid">
+          <label>
+            Account name
+            <input
+              required
+              placeholder="Example: Main festival account"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+            />
+          </label>
+          <label>
+            UPI ID
+            <input
+              required
+              placeholder="Example: aarohan@upi"
+              value={upiId}
+              onChange={(e) => setUpiId(e.target.value)}
+            />
+          </label>
+          <label>
+            UPI QR image (PNG, JPG, or WebP — max 2 MB)
+            <input
+              required
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={(e) => setQr(e.target.files?.[0] || null)}
+            />
+          </label>
+        </div>
+        <button>Add payment QR</button>
+      </form>
+      {notice && <p className="message">{notice}</p>}
+      <div className="payment-method-list">
+        {paymentMethods.map((method) => (
+          <article key={method._id}>
+            <img src={method.qrUrl} alt={`${method.label} UPI QR`} />
+            <div>
+              <b>{method.label}</b>
+              <span>UPI ID: {method.upiId}</span>
+            </div>
+            <button className="danger" onClick={() => removePaymentMethod(method)}>
+              Delete QR
+            </button>
+          </article>
+        ))}
+        {!paymentMethods.length && <p className="event-note">No payment QR has been added yet.</p>}
+      </div>
+    </section>
+  );
+}
+
+function EventEditor({ event, token, paymentMethods, onSaved, onCancel, requestConfirmation }) {
   const [data, setData] = useState(() => ({
     name: event.name || "",
     category: event.category || "SPORT",
@@ -1511,7 +1614,7 @@ function EventEditor({ event, token, onSaved, onCancel, requestConfirmation }) {
     format: event.format || "SOLO",
     venue: event.venue || "",
     startsAt: dateTimeInputValue(event.startsAt),
-    upiId: event.upiId || "",
+    paymentMethodId: event.paymentMethod?._id || event.paymentMethod || "",
     paymentInstructions: event.paymentInstructions || "",
     rules: event.rules || "",
     active: event.active !== false,
@@ -1525,7 +1628,7 @@ function EventEditor({ event, token, onSaved, onCancel, requestConfirmation }) {
       format: event.format || "SOLO",
       venue: event.venue || "",
       startsAt: dateTimeInputValue(event.startsAt),
-      upiId: event.upiId || "",
+      paymentMethodId: event.paymentMethod?._id || event.paymentMethod || "",
       paymentInstructions: event.paymentInstructions || "",
       rules: event.rules || "",
       active: event.active !== false,
@@ -1620,11 +1723,18 @@ function EventEditor({ event, token, onSaved, onCancel, requestConfirmation }) {
             />
           </label>
           <label>
-            UPI ID
-            <input
-              value={data.upiId}
-              onChange={(e) => setData({ ...data, upiId: e.target.value })}
-            />
+            Payment QR & UPI account
+            <select
+              value={data.paymentMethodId}
+              onChange={(e) => setData({ ...data, paymentMethodId: e.target.value })}
+            >
+              <option value="">Keep current payment details</option>
+              {paymentMethods.map((method) => (
+                <option key={method._id} value={method._id}>
+                  {method.label} — {method.upiId}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
         <label>
@@ -1671,6 +1781,7 @@ function AdminManage({
 }) {
   const [staff, setStaff] = useState([]);
   const [participants, setParticipants] = useState([]);
+  const [paymentMethods, setPaymentMethods] = useState([]);
   const [notice, setNotice] = useState("");
   const [editingEvent, setEditingEvent] = useState(null);
   const [confirmation, setConfirmation] = useState(null);
@@ -1678,15 +1789,21 @@ function AdminManage({
     Promise.all([
       call("/auth/users", { token: session.token }),
       call("/registrations", { token: session.token }),
+      call("/payment-methods", { token: session.token }),
     ])
-      .then(([users, registrations]) => {
+      .then(([users, registrations, methods]) => {
         setStaff(users);
         setParticipants(registrations);
+        setPaymentMethods(methods);
       })
       .catch((error) => setNotice(error.message));
   useEffect(() => {
     void load();
   }, []);
+  const refreshPaymentMethods = async () => {
+    const methods = await call("/payment-methods", { token: session.token });
+    setPaymentMethods(methods);
+  };
   const requestConfirmation = (details) => setConfirmation(details);
   const remove = async (path, label) => {
     try {
@@ -1730,12 +1847,19 @@ function AdminManage({
         refreshSponsors={refreshSponsors}
         requestConfirmation={requestConfirmation}
       />
+      <PaymentMethodAdmin
+        token={session.token}
+        paymentMethods={paymentMethods}
+        refreshPaymentMethods={refreshPaymentMethods}
+        requestConfirmation={requestConfirmation}
+      />
       {notice && <p className="message">{notice}</p>}
       <h3>Events</h3>
       {editingEvent && (
         <EventEditor
           event={editingEvent}
           token={session.token}
+          paymentMethods={paymentMethods}
           onSaved={savedEvent}
           onCancel={() => setEditingEvent(null)}
           requestConfirmation={requestConfirmation}

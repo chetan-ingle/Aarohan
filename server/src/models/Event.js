@@ -17,6 +17,7 @@ const eventSchema = new mongoose.Schema({
   registrationDeadline: Date,
   coordinatorName: String,
   coordinatorPhone: String,
+  paymentMethod: { type: mongoose.Schema.Types.ObjectId, ref: 'PaymentMethod' },
   upiId: String,
   paymentInstructions: String,
   upiQrUrl: String,

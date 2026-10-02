@@ -45,7 +45,7 @@ router.post('/payment-proof', upload.single('proof'), async (req, res, next) => 
   }
 });
 
-router.post('/upi-qr', upload.single('qr'), async (req, res, next) => {
+router.post('/upi-qr', protect, authorize('SUPER_ADMIN'), upload.single('qr'), async (req, res, next) => {
   if (!req.file) return res.status(400).json({ message: 'Upload a UPI QR image' });
   try {
     const result = await uploadToImageKit(req.file, 'aarohan/upi');
