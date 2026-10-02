@@ -11,7 +11,7 @@ router.get('/', protect, authorize('SUPER_ADMIN', 'FINANCE'), asyncHandler(async
   res.json(await PaymentMethod.find().sort({ isDefault: -1, createdAt: -1 }));
 }));
 
-router.post('/', protect, authorize('FINANCE'), asyncHandler(async (req, res) => {
+router.post('/', protect, authorize('SUPER_ADMIN', 'FINANCE'), asyncHandler(async (req, res) => {
   const { label, upiId, qrUrl, qrFileId } = req.body;
   if (!label?.trim() || !upiId?.trim() || !qrUrl) {
     return res.status(400).json({ message: 'Payment account name, UPI ID, and QR image are required.' });
@@ -20,7 +20,7 @@ router.post('/', protect, authorize('FINANCE'), asyncHandler(async (req, res) =>
   res.status(201).json(await PaymentMethod.create({ label, upiId, qrUrl, qrFileId, isDefault: !hasDefault }));
 }));
 
-router.patch('/:id/default', protect, authorize('FINANCE'), asyncHandler(async (req, res) => {
+router.patch('/:id/default', protect, authorize('SUPER_ADMIN', 'FINANCE'), asyncHandler(async (req, res) => {
   const paymentMethod = await PaymentMethod.findById(req.params.id);
   if (!paymentMethod) return res.status(404).json({ message: 'Payment QR not found.' });
   await PaymentMethod.updateMany({ _id: { $ne: paymentMethod._id } }, { $set: { isDefault: false } });
@@ -37,7 +37,7 @@ router.patch('/:id/default', protect, authorize('FINANCE'), asyncHandler(async (
   res.json({ ...paymentMethod.toObject(), updatedEvents: result.modifiedCount });
 }));
 
-router.delete('/:id', protect, authorize('FINANCE'), asyncHandler(async (req, res) => {
+router.delete('/:id', protect, authorize('SUPER_ADMIN', 'FINANCE'), asyncHandler(async (req, res) => {
   const paymentMethod = await PaymentMethod.findById(req.params.id);
   if (!paymentMethod) return res.status(404).json({ message: 'Payment QR not found.' });
 

@@ -702,7 +702,10 @@ function Staff({ session, events, refresh }) {
           records={records}
           act={act}
           token={session.token}
-          canManagePaymentMethods={session.user.role === "FINANCE"}
+          canManagePaymentMethods={[
+            "SUPER_ADMIN",
+            "FINANCE",
+          ].includes(session.user.role)}
         />
       )}
       {tab === "cct" && (
@@ -1902,6 +1905,12 @@ function AdminManage({
       <SponsorAdmin
         token={session.token}
         refreshSponsors={refreshSponsors}
+        requestConfirmation={requestConfirmation}
+      />
+      <PaymentMethodAdmin
+        token={session.token}
+        paymentMethods={paymentMethods}
+        refreshPaymentMethods={refreshPaymentMethods}
         requestConfirmation={requestConfirmation}
       />
       {notice && <p className="message">{notice}</p>}
