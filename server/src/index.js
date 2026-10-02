@@ -38,6 +38,7 @@ app.use('/api/uploads', uploadRoutes);
 app.use('/api/sponsors', sponsorRoutes);
 app.use((err, _req, res, _next) => {
   console.error(err);
+  if (err && err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ message: 'Image size must be 2 MB or smaller' });
   // Mongoose validation errors -> 400 with validation messages
   if (err && err.name === 'ValidationError') {
     const messages = Object.values(err.errors || {}).map((e) => e.message).filter(Boolean);

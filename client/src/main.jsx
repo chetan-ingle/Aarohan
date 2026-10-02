@@ -326,11 +326,20 @@ function PublicRegistration({ events, refresh, lockedEventId = "" }) {
             />
           </label>
           <label>
-            Payment screenshot (JPG, PNG, WebP; maximum 5 MB)
+            Payment screenshot (JPG, PNG, WebP; maximum 2 MB)
             <input
               type="file"
               accept="image/png,image/jpeg,image/webp"
-              onChange={(e) => setProof(e.target.files[0])}
+              onChange={(e) => {
+                const file = e.target.files[0];
+                if (file && file.size > 2 * 1024 * 1024) {
+                  setProof(null);
+                  setNotice("Payment screenshot must be 2 MB or smaller.");
+                  e.target.value = "";
+                  return;
+                }
+                setProof(file || null);
+              }}
             />
           </label>
           <button disabled={!event}>Submit registration</button>

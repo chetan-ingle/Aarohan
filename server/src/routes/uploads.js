@@ -35,7 +35,7 @@ const uploadToImageKit = (file, folder) => new Promise((resolve, reject) => {
 });
 
 router.post('/payment-proof', upload.single('proof'), async (req, res, next) => {
-  if (!req.file) return res.status(400).json({ message: 'Upload a JPG, PNG, or WebP image up to 5 MB' });
+  if (!req.file) return res.status(400).json({ message: 'Upload a JPG, PNG, or WebP image up to 2 MB' });
   try {
     const result = await uploadToImageKit(req.file, 'aarohan/payment-proofs');
     res.status(201).json({ url: result.url, fileId: result.fileId });
@@ -57,7 +57,7 @@ router.post('/upi-qr', upload.single('qr'), async (req, res, next) => {
 });
 
 router.post('/sponsor', protect, authorize('SUPER_ADMIN'), upload.single('sponsor'), async (req, res, next) => {
-  if (!req.file) return res.status(400).json({ message: 'Upload a PNG, JPG, or WebP sponsor image up to 5 MB' });
+  if (!req.file) return res.status(400).json({ message: 'Upload a PNG, JPG, or WebP sponsor image up to 2 MB' });
   try {
     const result = await uploadToImageKit(req.file, 'aarohan/sponsors');
     res.status(201).json({ url: result.url, fileId: result.fileId });
