@@ -21,8 +21,13 @@ const configuredEmails = (name) => String(process.env[name] || '').split(',').ma
 const registrationDate = (value) => value ? new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' }).format(value) : '';
 
 router.post('/', asyncHandler(async (req, res) => {
-  const event = await Event.findOne({ _id: req.body.event, active: true });
+  const event = await Event.findById(req.body.event);
   if (!event) return res.status(404).json({ message: 'Event unavailable' });
+  // Events created before registrationOpen existed used active as the switch.
+  const registrationOpen = event.registrationOpen === undefined
+    ? event.active !== false
+    : event.registrationOpen;
+  if (!registrationOpen) return res.status(409).json({ message: 'Registration for this event is closed' });
   if (event.registrationDeadline && event.registrationDeadline < new Date()) return res.status(409).json({ message: 'Registration deadline has passed' });
   const approvedCount = await Registration.countDocuments({ event: event._id, 'payment.status': 'APPROVED' });
   if (approvedCount >= event.capacity) return res.status(409).json({ message: 'Event capacity reached' });

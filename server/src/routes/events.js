@@ -37,9 +37,10 @@ const applyPaymentMethod = async (payload, useDefault = false) => {
 };
 
 router.get('/', asyncHandler(async (_req, res) => {
-  // Public event details must update immediately after a Super Admin edit.
+  // Include closed events so they remain visible to Manage, CCT, public event
+  // listings, and existing registrations. registrationOpen controls sign-ups.
   res.set('Cache-Control', 'no-store');
-  res.json(await Event.find({ active: true }).sort('name'));
+  res.json(await Event.find().sort('name'));
 }));
 router.post('/', protect, authorize('SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const payload = { ...req.body };

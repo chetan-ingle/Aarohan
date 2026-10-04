@@ -32,6 +32,11 @@ const dateTimeInputValue = (value) => {
   )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 };
 const confirmAction = (message) => window.confirm(message);
+// For legacy events, active was previously used to close registration. New
+// events use registrationOpen, keeping closed events visible everywhere.
+const isRegistrationOpen = (event) => Boolean(event) && (
+  event.registrationOpen === undefined ? event.active !== false : event.registrationOpen
+);
 function ActionConfirmModal({ confirmation, onClose }) {
   if (!confirmation) return null;
   const confirm = async () => {
@@ -342,7 +347,10 @@ function PublicRegistration({ events, refresh, lockedEventId = "" }) {
               }}
             />
           </label>
-          <button disabled={!event}>Submit registration</button>
+          {!isRegistrationOpen(event) && event && (
+            <p className="message">Registration for this event is closed.</p>
+          )}
+          <button disabled={!isRegistrationOpen(event)}>Submit registration</button>
           {event?.rules && (
             <div className="registration-rules registration-rules-bottom">
               <b>Rules</b>
@@ -448,8 +456,8 @@ function Home({ events, sponsors, go }) {
       </section>
       <section className="home-section compact">
         <h2>
-          {events.length
-            ? `${events.length} events are open`
+          {events.filter(isRegistrationOpen).length
+            ? `${events.filter(isRegistrationOpen).length} events are open`
             : "Events are launching soon"}
         </h2>
         <button onClick={() => go("events")}>View event catalogue</button>
@@ -487,8 +495,11 @@ function EventExplorer({ events, go }) {
                         Date & time: {eventDateTime(event.startsAt)}
                       </span>
                     )}
-                    <button onClick={() => go(`register/${event._id}`)}>
-                      Register
+                    <button
+                      disabled={!isRegistrationOpen(event)}
+                      onClick={() => go(`register/${event._id}`)}
+                    >
+                      {isRegistrationOpen(event) ? "Register" : "Registration closed"}
                     </button>
                   </article>
                 ))}
@@ -1677,7 +1688,7 @@ function EventEditor({ event, token, paymentMethods, onSaved, onCancel, requestC
     paymentMethodId: event.paymentMethod?._id || event.paymentMethod || "",
     paymentInstructions: event.paymentInstructions || "",
     rules: event.rules || "",
-    active: event.active !== false,
+    registrationOpen: isRegistrationOpen(event),
   }));
   const [notice, setNotice] = useState("");
   useEffect(() => {
@@ -1691,7 +1702,7 @@ function EventEditor({ event, token, paymentMethods, onSaved, onCancel, requestC
       paymentMethodId: event.paymentMethod?._id || event.paymentMethod || "",
       paymentInstructions: event.paymentInstructions || "",
       rules: event.rules || "",
-      active: event.active !== false,
+      registrationOpen: isRegistrationOpen(event),
     });
     setNotice("");
   }, [event]);
@@ -1816,10 +1827,10 @@ function EventEditor({ event, token, paymentMethods, onSaved, onCancel, requestC
         <label className="toggle-label">
           <input
             type="checkbox"
-            checked={data.active}
-            onChange={(e) => setData({ ...data, active: e.target.checked })}
+            checked={data.registrationOpen}
+            onChange={(e) => setData({ ...data, registrationOpen: e.target.checked })}
           />{" "}
-          Event is open for registration
+          Registration is open
         </label>
         <div className="editor-actions">
           <button>Save changes</button>

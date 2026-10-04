@@ -22,6 +22,11 @@ const eventSchema = new mongoose.Schema({
   paymentInstructions: String,
   upiQrUrl: String,
   formFields: [{ label: String, key: String, type: { type: String, enum: ['TEXT', 'EMAIL', 'PHONE', 'NUMBER'], default: 'TEXT' }, required: { type: Boolean, default: false } }],
+  // Visibility and registration availability are separate. Closing sign-ups
+  // must never remove the event from staff, CCT, or historical exports.
+  // No schema default: documents created before this field fall back to their
+  // existing active value until an admin saves the new registration switch.
+  registrationOpen: Boolean,
   active: { type: Boolean, default: true }
 }, { timestamps: true });
 export default mongoose.model('Event', eventSchema);
