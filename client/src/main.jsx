@@ -1663,9 +1663,9 @@ function PaymentMethodAdmin({ token, paymentMethods, refreshPaymentMethods, requ
               {method.isDefault && <strong className="primary-payment">Currently used on registration pages</strong>}
               <span>UPI ID: {method.upiId}</span>
             </div>
-            {!method.isDefault && (
-              <button onClick={() => makeDefault(method)}>Use this QR</button>
-            )}
+            <button onClick={() => makeDefault(method)}>
+              Use this QR
+            </button>
             <button className="danger" onClick={() => removePaymentMethod(method)}>
               Delete QR
             </button>

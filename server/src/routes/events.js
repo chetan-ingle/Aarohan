@@ -40,7 +40,22 @@ router.get('/', asyncHandler(async (_req, res) => {
   // Include closed events so they remain visible to Manage, CCT, public event
   // listings, and existing registrations. registrationOpen controls sign-ups.
   res.set('Cache-Control', 'no-store');
-  res.json(await Event.find().sort('name'));
+  const [events, primaryPaymentMethod] = await Promise.all([
+    Event.find().sort('name').lean(),
+    PaymentMethod.findOne({ isDefault: true, active: true }).lean(),
+  ]);
+  // Older events may not yet have a copied QR URL. Use the selected payment
+  // account for the public response so the registration page can render it;
+  // event-specific QR details are never overwritten here.
+  res.json(events.map((event) => {
+    if (event.upiQrUrl || !primaryPaymentMethod) return event;
+    return {
+      ...event,
+      paymentMethod: event.paymentMethod || primaryPaymentMethod._id,
+      upiId: event.upiId || primaryPaymentMethod.upiId,
+      upiQrUrl: primaryPaymentMethod.qrUrl,
+    };
+  }));
 }));
 router.post('/', protect, authorize('SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const payload = { ...req.body };
